@@ -42,6 +42,6 @@ public class Main {
                  OCLValidationFailed | UnhandledNetType e) {
             throw new RuntimeException(e);
         }
-        BytecodeParser parser = new BytecodeParser(jarFilePath);
+        BytecodeParser.parseProgram(jarFilePath);
     }
 }
