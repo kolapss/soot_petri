@@ -45,9 +45,9 @@ public class PetriNetBuilder
         TransitionHLAPI t2 = new TransitionHLAPI("transistion2");
 
         new ArcHLAPI("a1", p1, t1, page);
-        new ArcHLAPI("a3", p3, t2, page);
-        new ArcHLAPI("a4", t2, p2, page);
-        new ArcHLAPI("a5", t1, p3, page);
+        new ArcHLAPI("a2", p3, t2, page);
+        new ArcHLAPI("a3", t2, p2, page);
+        new ArcHLAPI("a4", t1, p3, page);
 
         p1.setContainerPageHLAPI(page);
         p2.setContainerPageHLAPI(page);
