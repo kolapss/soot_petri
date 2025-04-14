@@ -61,6 +61,8 @@ public class RetroLambda {
     }
 
     public static void run(String path) {
+        String inputDir = System.getProperty("user.dir") + "/classes";
+        String outputDir = System.getProperty("user.dir") + "/retroclasses";
         try {
             extractJar(path, System.getProperty("user.dir") + "/classes");
         } catch (IOException e) {
@@ -69,8 +71,6 @@ public class RetroLambda {
         String java8Home = "C:/Program Files/Java/jre1.8.0_271";
         String retrolambdaJar = "D:/MyProjects/soot_petri/retrolambda/retrolambda.jar";
 
-        String inputDir = System.getProperty("user.dir") + "/classes";
-        String outputDir = System.getProperty("user.dir") + "/retroclasses";
         try {
             deleteDirectory(Paths.get(inputDir));
             deleteDirectory(Paths.get(outputDir));

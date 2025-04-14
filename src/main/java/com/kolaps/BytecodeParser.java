@@ -3,13 +3,13 @@ package com.kolaps;
 import boomerang.BackwardQuery;
 import boomerang.Boomerang;
 import boomerang.Query;
-import boomerang.options.BoomerangOptions;
-import boomerang.results.BackwardBoomerangResults;
-import boomerang.scope.*;
-import boomerang.scope.soot.BoomerangPretransformer;
-import boomerang.scope.soot.SootCallGraph;
-import boomerang.scope.soot.SootFrameworkScope;
 
+import boomerang.results.BackwardBoomerangResults;
+
+
+import boomerang.scene.*;
+import boomerang.scene.jimple.BoomerangPretransformer;
+import boomerang.scene.jimple.SootCallGraph;
 import com.kolaps.utils.RetroLambda;
 import soot.*;
 import soot.jimple.internal.JAssignStmt;
@@ -18,6 +18,7 @@ import soot.options.Options;
 import soot.toolkits.graph.ExceptionalUnitGraph;
 import soot.toolkits.graph.UnitGraph;
 import wpds.impl.Weight;
+
 
 import java.io.IOException;
 import java.util.*;
@@ -58,12 +59,13 @@ public class BytecodeParser {
         }
         mainClass.getMethods();
         SootMethod mainMethod = mainClass.getMethodByName("main");
+        System.out.println(mainMethod.retrieveActiveBody());
         UnitGraph graph = new ExceptionalUnitGraph(mainMethod.retrieveActiveBody());
-        SparkTransformer.v().transform();
+        /*SparkTransformer.v().transform();
         PointsToAnalysis pta = Scene.v().getPointsToAnalysis();
         PointsToSet pta1=null;
-        PointsToSet pta2=null;
-        for (Unit u : graph) {
+        PointsToSet pta2=null;*/
+        /*for (Unit u : graph) {
             if (u instanceof JAssignStmt) {
                 JAssignStmt assign = (JAssignStmt) u;
                 if (assign.getLeftOp().toString().equals("a")) {
@@ -78,8 +80,8 @@ public class BytecodeParser {
         }
         if (pta1.hasNonEmptyIntersection(pta2)) {
             System.out.println(pta1);
-        }
-        //analyze(mainClass, mainMethod);
+        }*/
+        analyze(mainClass, mainMethod);
 
 
     }
@@ -130,7 +132,7 @@ public class BytecodeParser {
     private static Transformer createAnalysisTransformer(SootClass mainClass, SootMethod mainMethod) {
         return new SceneTransformer() {
             protected void internalTransform(String phaseName, @SuppressWarnings("rawtypes") Map options) {
-                SootCallGraph sootCallGraph = new SootCallGraph(Scene.v().getCallGraph(), Collections.singletonList(mainMethod));
+                SootCallGraph sootCallGraph = new SootCallGraph();
                 AnalysisScope scope = new AnalysisScope(sootCallGraph) {
 
                     @Override
@@ -159,12 +161,9 @@ public class BytecodeParser {
                     }
                 };
                 // 1. Create a Boomerang solver.
-                FrameworkScope scopeSoot = new SootFrameworkScope(Scene.v(), Scene.v().getCallGraph(), Collections.singletonList(mainMethod), dat);
-                BoomerangOptions options1 = BoomerangOptions.builder().enableTrackDataFlowPath(true).enableTrackPathConditions(true).enableTypeCheck(true).enableTrackImplicitFlows(true).enableTrackStaticFieldAtEntryPointToClinit(true).enablePrunePathConditions(true)
-                        //.withStaticFieldStrategy(Strategies.StaticFieldStrategy.FLOW_SENSITIVE)
-                        .build();
 
-                Boomerang solver = new Boomerang(scopeSoot, options1);
+
+                Boomerang solver = new Boomerang(sootCallGraph,dat);
 
                 // 2. Submit a query to the solver.
                 Collection<boomerang.Query> seeds = scope.computeSeeds();

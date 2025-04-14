@@ -10,7 +10,12 @@ public class Main {
 
     static {
         try {
-            pnml = new PetriNetBuilder();
+            try {
+                pnml = new PetriNetBuilder();
+            } catch (OtherException | ValidationFailedException | BadFileFormatException | IOException |
+                     OCLValidationFailed | UnhandledNetType e) {
+                throw new RuntimeException(e);
+            }
         } catch (InvalidIDException | VoidRepositoryException e) {
             throw new RuntimeException(e);
         }
@@ -36,12 +41,7 @@ public class Main {
             System.out.println("Пример: java -jar stal.jar -f path/to/file.jar");
             System.exit(1);
         }
-        try {
-            pnml.exportToPnml();
-        } catch (OtherException | ValidationFailedException | BadFileFormatException | IOException |
-                 OCLValidationFailed | UnhandledNetType e) {
-            throw new RuntimeException(e);
-        }
+
         BytecodeParser.parseProgram(jarFilePath);
     }
 }
