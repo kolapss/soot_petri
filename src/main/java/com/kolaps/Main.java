@@ -1,14 +1,13 @@
 package com.kolaps;
 
 import fr.lip6.move.pnml.framework.utils.exception.*;
-import soot.options.Options;
 
 import java.io.IOException;
 
 public class Main {
-    public static PetriNetBuilder pnml;
 
-    static {
+
+    /*static {
         try {
             try {
                 pnml = new PetriNetBuilder();
@@ -19,9 +18,8 @@ public class Main {
         } catch (InvalidIDException | VoidRepositoryException e) {
             throw new RuntimeException(e);
         }
-    }
+    }*/
     public static void main(String[] args) {
-
 
 
         String jarFilePath = null;
@@ -41,7 +39,19 @@ public class Main {
             System.out.println("Пример: java -jar stal.jar -f path/to/file.jar");
             System.exit(1);
         }
-
-        BytecodeParser.parseProgram(jarFilePath);
+        PetriNetBuilder builder;
+        try {
+            builder = new PetriNetBuilder();
+        } catch (InvalidIDException | VoidRepositoryException | OtherException | ValidationFailedException |
+                 BadFileFormatException | IOException | OCLValidationFailed | UnhandledNetType e) {
+            throw new RuntimeException(e);
+        }
+        BytecodeParser.parseProgram(jarFilePath, builder);
+        try {
+            builder.exportToPnml();
+        } catch (OtherException | ValidationFailedException | BadFileFormatException | IOException |
+                 OCLValidationFailed | UnhandledNetType e) {
+            throw new RuntimeException(e);
+        }
     }
 }
