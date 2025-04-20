@@ -115,11 +115,12 @@ public class PetriNetBuilder {
         String strAllocValue = PointerAnalysis.getAllocSite(monitorStmtUnit, contextMethod);
         return lockPlaces.computeIfAbsent(strAllocValue, key -> {
             System.out.println("Creating new Lock Place for identifier: " + key);
-
-            PlaceHLAPI lockPlace = createPlace("Lock_" + key, methodPages.get(contextMethod));
+            String placeName = "Lock_" + key;
+            placeName = escapeXml(placeName);
+            PlaceHLAPI lockPlace = createPlace(placeName, methodPages.get(contextMethod));
             // Установить начальную маркировку = 1 (блокировка свободна)
             new PTMarkingHLAPI(Long.valueOf(1),lockPlace);
-            System.out.println("Setting initial marking 1 for Lock Place: " + lockPlace.getName().getText() + " (ID: " + key + ")");
+            System.out.println("Setting initial marking 1 for Lock Place: " + lockPlace.getId() + " (ID: " + key + ")");
             return lockPlace;
         });
 
@@ -399,7 +400,7 @@ public class PetriNetBuilder {
 
         else {
             // === Обработка прочих (generic) инструкций ===
-            //handleGenericUnit(unit, placeBeforeUnit, page, graph);
+            handleGenericUnit(unit, placeBeforeUnit, page, graph);
         }
 
         // Кэшируем созданное место *после* unit (если оно было создано и не является ветвлением)
@@ -458,7 +459,6 @@ public class PetriNetBuilder {
                                 {
                                     JAssignStmt assign = (JAssignStmt) lamU;
                                     SootClass lamClass = ((JStaticInvokeExpr)assign.getRightOpBox().getValue()).getMethodRef().getDeclaringClass();
-                                    lamClass.getMethod("void");
                                     runMethod = lamClass.getMethod("void run()");
                                     System.out.println(assign);
                                 }
@@ -495,6 +495,16 @@ public class PetriNetBuilder {
         return runMethod;
     }
 
+    public static String escapeXml(String input) {
+        return input
+                .replace("&", "&amp;")
+                .replace("<", "&lt;")
+                .replace(">", "&gt;")
+                .replace("\"", "&quot;")
+                .replace("'", "&apos;");
+    }
+
+
 
     private void addSuccessorsToWorklist(UnitGraph graph, Unit unit, PlaceHLAPI placeAfterUnit, PageHLAPI page) {
         try{
@@ -503,7 +513,7 @@ public class PetriNetBuilder {
                 System.out.println("No successors for: [" + page.getId() + "] " + unit);
             } else {
                 for (Unit succ : successors) {
-                    System.out.println("Adding successor to worklist: [" + page.getId() + "] " + succ + " after place " + placeAfterUnit.getName().getText());
+                    System.out.println("Adding successor to worklist: [" + page.getId() + "] " + succ + " after place " + placeAfterUnit.getId());
                     worklist.add(new TraversalState(succ, placeAfterUnit, page));
                 }
             }

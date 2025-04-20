@@ -17,7 +17,7 @@ public class PetriNetModeler {
             throw new RuntimeException(e);
         }
         arc.setContainerPageHLAPI(page);
-        System.out.println("Created Arc: " + source.getName().getText() + " -> " + target.getName().getText());
+        System.out.println("Created Arc: " + source.getId() + " -> " + target.getId());
         return arc;
     }
 
@@ -30,7 +30,7 @@ public class PetriNetModeler {
             throw new RuntimeException(e);
         }
         arc.setContainerPageHLAPI(page);
-        System.out.println("Created Arc: " + source.getName().getText() + " -> " + target.getName().getText());
+        System.out.println("Created Arc: " + source.getId() + " -> " + target.getId());
         return arc;
     }
 

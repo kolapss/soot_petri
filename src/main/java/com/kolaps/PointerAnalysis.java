@@ -10,6 +10,7 @@ import boomerang.scene.jimple.SootCallGraph;
 import boomerang.util.AccessPath;
 import soot.*;
 import soot.jimple.internal.JEnterMonitorStmt;
+import soot.jimple.internal.JExitMonitorStmt;
 import soot.jimple.internal.JInvokeStmt;
 import soot.jimple.internal.JVirtualInvokeExpr;
 import wpds.impl.Weight;
@@ -24,7 +25,7 @@ public class PointerAnalysis {
     public static Val value;
     public static ControlFlowGraph.Edge lastEdge;
     public static Map<ForwardQuery, AbstractBoomerangResults.Context> allocSites;
-    public  static Set<AccessPath> allAliases;
+    public static Set<AccessPath> allAliases;
     //public static Boomerang solver;
 
     public static void setupAnalyze() {
@@ -33,13 +34,19 @@ public class PointerAnalysis {
     }
 
 
-
     public static String getAllocSite(Unit unit, SootMethod method) {
         Transformer executor = new SceneTransformer() {
             protected void internalTransform(
                     String phaseName, @SuppressWarnings("rawtypes") Map options) {
                 SootClass cl = method.getDeclaringClass();
-                String var = ((JEnterMonitorStmt) unit).getOp().toString() + " =";
+                String var;
+                if (unit instanceof JEnterMonitorStmt) {
+                    var = ((JEnterMonitorStmt) unit).getOp().toString() + " =";
+                }
+                else
+                {
+                    var = ((JExitMonitorStmt) unit).getOp().toString() + " =";
+                }
                 SootCallGraph sootCallGraph = new SootCallGraph();
                 AnalysisScope scope = new AnalysisScope(sootCallGraph) {
 
