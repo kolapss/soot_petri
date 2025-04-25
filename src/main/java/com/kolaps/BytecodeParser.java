@@ -16,9 +16,9 @@ import java.util.jar.Manifest;
 
 public class BytecodeParser {
 
-    private static String path = null;
+    public static String path = null;
 
-    private static String getMainClass(String jarFilePath) throws IOException {
+    public static String getMainClass(String jarFilePath) throws IOException {
         try (JarFile jarFile = new JarFile(jarFilePath)) {
             Manifest manifest = jarFile.getManifest();
             if (manifest != null) {
@@ -31,17 +31,17 @@ public class BytecodeParser {
 
     public static void setPath(String path) {path = path;}
 
-    public static void parseProgram(String path, PetriNetBuilder builder) {
-        path = path;
-        RetroLambda.run(path);
+    public static void parseProgram(String mypath, PetriNetBuilder builder) {
+        path = mypath;
+        RetroLambda.run(mypath);
         SootClass mainClass;
         try {
-            setupSoot(path, getMainClass(path));
+            setupSoot(mypath, getMainClass(mypath));
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
         try {
-            mainClass = Scene.v().loadClassAndSupport(getMainClass(path));
+            mainClass = Scene.v().loadClassAndSupport(getMainClass(mypath));
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
