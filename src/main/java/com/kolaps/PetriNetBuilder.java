@@ -36,6 +36,7 @@ public class PetriNetBuilder {
     private int uniqueIdCounter;
     private int monitorCounter;
     private String packageName;
+    private TransitionHLAPI endTransition;
 
     PetriNetBuilder() throws InvalidIDException, VoidRepositoryException, OtherException, ValidationFailedException, BadFileFormatException, IOException, OCLValidationFailed, UnhandledNetType {
         ModelRepository.getInstance().createDocumentWorkspace("void");
@@ -89,6 +90,8 @@ public class PetriNetBuilder {
 
         // Создаем начальное место для main
         PlaceHLAPI startMainPlace = createPlace(escapeXml(mainMethod.getSignature()), mainPage);
+        endTransition = createTransition("end_transition",this.mainPage);
+        PlaceHLAPI endPlace = createPlace("END", mainPage);
         // Устанавливаем начальную маркировку для точки входа
         new PTMarkingHLAPI(Long.valueOf(1), startMainPlace);
         System.out.println("Setting initial marking 1 for Start Place: " + startMainPlace.getId());
@@ -96,12 +99,13 @@ public class PetriNetBuilder {
         methodEntryPlaces.put(mainMethod, startMainPlace);
         // Start traversal
         try {
-            traverseMethod(mainMethod, startMainPlace, new HashSet<>());
+            traverseMethod(mainMethod, startMainPlace, new HashSet<>(),endPlace);
         } catch (Exception e) {
             System.err.println("Error during traversal: " + e.getMessage());
             e.printStackTrace();
             return null; // Indicate failure
         }
+        createArc(this.endTransition,endPlace,this.mainPage);
 
 
         // Return the constructed net
@@ -123,7 +127,7 @@ public class PetriNetBuilder {
         }
     }
 
-    private void traverseMethod(SootMethod method, PlaceHLAPI entryPlace, Set<SootMethod> visitedOnPath) {
+    private void traverseMethod(SootMethod method, PlaceHLAPI entryPlace, Set<SootMethod> visitedOnPath, PlaceHLAPI afterPlace) {
 
         // --- Base Cases and Checks ---
         if (!method.isConcrete()) {
@@ -191,7 +195,7 @@ public class PetriNetBuilder {
                 } else if (currentUnit instanceof ExitMonitorStmt) {
                     processExitMonitor((ExitMonitorStmt) currentUnit, currentUnitEntryPlace, graph, worklist, visitedUnits, method);
                 } else if (currentUnit instanceof InvokeStmt) {
-                    processInvoke((InvokeStmt) currentUnit, currentUnitEntryPlace, graph, worklist, visitedUnits, method, visitedOnPath);
+                    processInvoke( currentUnit,currentUnitEntryPlace,afterPlace, graph, worklist, visitedUnits, method, visitedOnPath);
                 } else if (currentUnit instanceof IfStmt) {
                     processIf((IfStmt) currentUnit, currentUnitEntryPlace, graph, worklist, visitedUnits, method);
                 } else if (currentUnit instanceof GotoStmt) {
@@ -225,19 +229,21 @@ public class PetriNetBuilder {
     }
 
     private void processReturn(Stmt stmt, PlaceHLAPI currentPlace) {
-        TransitionHLAPI returnTransition = createTransition("return_" + currentPlace.getId(),this.mainPage);
-        createArc(currentPlace, returnTransition,this.mainPage);
+        //TransitionHLAPI returnTransition = createTransition("return_" + currentPlace.getId(),this.mainPage);
+        //createArc(currentPlace, returnTransition,this.mainPage);
 
         if (!returnPlaceStack.isEmpty()) {
             PlaceHLAPI callerReturnPlace = returnPlaceStack.peek(); // Peek, don't pop here. Popped by caller.
-            createArc(returnTransition, callerReturnPlace,this.mainPage);
+            //createArc(returnTransition, callerReturnPlace,this.mainPage);
             System.out.println("    Return -> Connects to caller return place: " + callerReturnPlace.getId());
         } else {
             // Return from the initial 'main' method or a thread's 'run' method
             System.out.println("    Return from top-level method (main or run).");
+            createArc(currentPlace,this.endTransition,this.mainPage);
+            /*TransitionHLAPI returnTransition = createTransition("return_" + currentPlace.getId(),this.mainPage);
             // Optionally create a final "end" place and connect returns from main/run to it.
             PlaceHLAPI endPlace = createPlace("program_end_" + currentPlace.getId(),this.mainPage); // Unique end place
-            createArc(returnTransition, endPlace,this.mainPage);
+            createArc(returnTransition, endPlace,this.mainPage);*/
         }
         // Return statement terminates this path in the current method. No successors to add to worklist from here.
     }
@@ -251,7 +257,8 @@ public class PetriNetBuilder {
     private void processIf(IfStmt currentUnit, PlaceHLAPI currentUnitEntryPlace, UnitGraph graph, Queue<Pair<Unit, PlaceHLAPI>> worklist, Set<Unit> visitedUnits, SootMethod method) {
     }
 
-    private void processInvoke(InvokeStmt stmt, PlaceHLAPI currentPlace, UnitGraph graph, Queue<Pair<Unit, PlaceHLAPI>> worklist, Set<Unit> visitedUnits, SootMethod currentMethod, Set<SootMethod> visitedOnPath) {
+    private void processInvoke(Unit unit, PlaceHLAPI currentPlace, PlaceHLAPI afterPlace, UnitGraph graph, Queue<Pair<Unit, PlaceHLAPI>> worklist, Set<Unit> visitedUnits, SootMethod currentMethod, Set<SootMethod> visitedOnPath) {
+        InvokeStmt stmt = (InvokeStmt) unit;
         InvokeExpr invokeExpr = stmt.getInvokeExpr();
         SootMethodRef methodRef = invokeExpr.getMethodRef();
 
@@ -264,7 +271,7 @@ public class PetriNetBuilder {
 
             // --- Special Handling for Concurrency/Synchronization ---
             if (signature.equals("<java.lang.Thread: void start()>") && invokeExpr instanceof InstanceInvokeExpr) {
-                processThreadStart(stmt, (InstanceInvokeExpr) invokeExpr, currentPlace, graph, worklist, visitedUnits, currentMethod, visitedOnPath);
+                processThreadStart(unit, (InstanceInvokeExpr) invokeExpr, currentPlace, afterPlace, graph, worklist, visitedUnits, currentMethod, visitedOnPath);
             } /*else if ((signature.equals("<java.lang.Object: void wait() throws java.lang.InterruptedException>") ||
                     signature.equals("<java.lang.Object: void wait(long) throws java.lang.InterruptedException>") ||
                     signature.equals("<java.lang.Object: void wait(long, int) throws java.lang.InterruptedException>"))
@@ -277,7 +284,7 @@ public class PetriNetBuilder {
             }*/
             // --- Handle Regular Method Call ---
             else if (targetMethod.isConcrete() && isApplicationClass(targetMethod)) { // Analyze concrete application methods
-                processMethodCall(stmt, targetMethod, currentPlace, graph, worklist, visitedUnits, currentMethod, visitedOnPath);
+                processMethodCall(stmt, targetMethod, currentPlace, afterPlace, graph, worklist, visitedUnits, currentMethod, visitedOnPath);
             }
             // --- Default Handling for Other Calls (Library, Abstract, etc.) ---
             else {
@@ -293,12 +300,12 @@ public class PetriNetBuilder {
         }
     }
 
-    private void processMethodCall(InvokeStmt stmt, SootMethod targetMethod, PlaceHLAPI currentPlace, UnitGraph graph, Queue<Pair<Unit, PlaceHLAPI>> worklist, Set<Unit> visitedUnits, SootMethod currentMethod, Set<SootMethod> visitedOnPath) {
+    private void processMethodCall(InvokeStmt stmt, SootMethod targetMethod, PlaceHLAPI currentPlace, PlaceHLAPI afterPlace, UnitGraph graph, Queue<Pair<Unit, PlaceHLAPI>> worklist, Set<Unit> visitedUnits, SootMethod currentMethod, Set<SootMethod> visitedOnPath) {
         String targetDesc = targetMethod.getSignature();
 
         String baseName = "call_" + escapeXml(currentMethod.getSignature()) + "_to_" + escapeXml(targetDesc);
         // --- Call Transition ---
-        TransitionHLAPI callTransition = createTransition(baseName,this.mainPage);
+        /*TransitionHLAPI callTransition = createTransition(baseName,this.mainPage);
         createArc(currentPlace, callTransition,this.mainPage);
 
         // --- Target Method Entry Place ---
@@ -306,27 +313,27 @@ public class PetriNetBuilder {
         PlaceHLAPI targetEntryPlace = methodEntryPlaces.computeIfAbsent(targetMethod, m -> createPlace("entry_" + escapeXml(m.getSignature()),this.mainPage));
         createArc(callTransition, targetEntryPlace,this.mainPage); // Arc from call to target entry
 
-        System.out.println("      Calling: " + targetMethod.getSignature() + " [Target Entry: " + targetEntryPlace.getId() + "]");
+        System.out.println("      Calling: " + targetMethod.getSignature() + " [Target Entry: " + targetEntryPlace.getId() + "]");*/
 
 
         // --- Return Place Handling ---
         // Place where control flow resumes *after* the call returns in the *caller*
-        PlaceHLAPI returnPlace = getOrCreateUnitExitPlace(stmt, currentMethod); // Place after the invoke statement
-        System.out.println("      Return Place (after call): " + returnPlace.getId());
+        //PlaceHLAPI returnPlace = getOrCreateUnitExitPlace(stmt, currentMethod); // Place after the invoke statement
+        //System.out.println("      Return Place (after call): " + returnPlace.getId());
 
         // Push the return place onto the stack *before* recursive call
-        returnPlaceStack.push(returnPlace);
+        returnPlaceStack.push(afterPlace);
 
         // --- Recursive Call ---
         try {
-            traverseMethod(targetMethod, targetEntryPlace, visitedOnPath); // Recurse
+            traverseMethod(targetMethod, currentPlace, visitedOnPath, afterPlace); // Recurse
         } finally {
             // Pop the stack after the recursive call returns (or throws)
             if (!returnPlaceStack.isEmpty()) {
                 PlaceHLAPI poppedPlace = returnPlaceStack.pop();
-                if (poppedPlace != returnPlace) {
+                if (poppedPlace != afterPlace) {
                     // This shouldn't happen with single-threaded traversal logic
-                    System.err.println("!!! Return place stack mismatch! Expected " + returnPlace.getId() + ", got " + poppedPlace.getId() + " !!!");
+                    System.err.println("!!! Return place stack mismatch! Expected " + afterPlace.getId() + ", got " + poppedPlace.getId() + " !!!");
                 }
             } else {
                 System.err.println("!!! Return stack empty after traversing " + targetMethod.getName() + " !!!");
@@ -336,7 +343,7 @@ public class PetriNetBuilder {
         // --- Add Successor to Worklist ---
         // The successor unit(s) after the call statement should be processed,
         // starting from the 'returnPlace'.
-        handleSuccessors(stmt, returnPlace, graph, worklist, visitedUnits, currentMethod);
+        handleSuccessors(stmt, currentPlace ,afterPlace, graph, worklist, visitedUnits, currentMethod);
     }
 
     private boolean isApplicationClass(SootMethod method)
@@ -368,25 +375,27 @@ public class PetriNetBuilder {
         });
     }
 
-    private void processThreadStart(InvokeStmt stmt, InstanceInvokeExpr invokeExpr, PlaceHLAPI currentPlace, UnitGraph graph, Queue<Pair<Unit, PlaceHLAPI>> worklist, Set<Unit> visitedUnits, SootMethod currentMethod, Set<SootMethod> visitedOnPath) {
+    private void processThreadStart(Unit unit, InstanceInvokeExpr invokeExpr, PlaceHLAPI currentPlace, PlaceHLAPI afterPlace, UnitGraph graph, Queue<Pair<Unit, PlaceHLAPI>> worklist, Set<Unit> visitedUnits, SootMethod currentMethod, Set<SootMethod> visitedOnPath) {
+        InvokeStmt stmt = (InvokeStmt) unit;
         Value threadObject = invokeExpr.getBase(); // The thread object being started
         String threadId = getMonitorId(threadObject); // Use monitor ID logic for thread obj ID
 
-        TransitionHLAPI startTransition = createTransition("start_" + threadId, this.mainPage);
+        TransitionHLAPI startTransition = createTransition(escapeXml(invokeExpr.toString()), this.mainPage);
         createArc(currentPlace, startTransition, this.mainPage);
 
         // 1. Continue current thread's execution path
         PlaceHLAPI placeAfterStart = getOrCreateUnitExitPlace(stmt, currentMethod);
         createArc(startTransition, placeAfterStart, this.mainPage);
-        handleSuccessors(stmt, placeAfterStart, graph, worklist, visitedUnits, currentMethod); // Continue caller thread
+        handleSuccessors(stmt, placeAfterStart, afterPlace, graph, worklist, visitedUnits, currentMethod); // Continue caller thread &&&&&&
 
 
         // 2. Start new thread at its run() method
         // This requires finding the actual 'run' method. Simplified approach:
-        SootMethod runMethod = findRunMethod(threadObject);
+        //SootMethod runMethod = findRunMethod(threadObject);
+        SootMethod runMethod = findRunMethodForStartCall(unit,currentMethod);
 
         if (runMethod != null && runMethod.isConcrete()) {
-            PlaceHLAPI runEntryPlace = methodEntryPlaces.computeIfAbsent(runMethod, m -> createPlace("entry_" + m.getName() + "_" + threadId, this.mainPage));
+            PlaceHLAPI runEntryPlace = methodEntryPlaces.computeIfAbsent(runMethod, m -> createPlace(escapeXml("entry_" + m.toString()), this.mainPage));
 
             createArc(startTransition, runEntryPlace, this.mainPage); // Arc forks to the run method entry
 
@@ -397,7 +406,7 @@ public class PetriNetBuilder {
             // We can call traverseMethod directly here, but be aware it explores one possible interleaving path at a time recursively.
             // A full analysis requires considering all paths in the final Petri net.
             try {
-                traverseMethod(runMethod, runEntryPlace, new HashSet<>(visitedOnPath)); // Use copy of stack
+                traverseMethod(runMethod, runEntryPlace, new HashSet<>(visitedOnPath), afterPlace); // Use copy of stack
             } catch (Exception e) {
                 System.err.println("Error traversing run() method for " + runMethod.getSignature());
                 e.printStackTrace();
@@ -501,7 +510,7 @@ public class PetriNetBuilder {
      * @param visitedUnits Set of visited units in this method activation.
      * @param method       The current method.
      */
-    private void handleSuccessors(Unit unit, PlaceHLAPI sourcePlace, UnitGraph graph, Queue<Pair<Unit, PlaceHLAPI>> worklist, Set<Unit> visitedUnits, SootMethod method) {
+    private void handleSuccessors(Unit unit,PlaceHLAPI beforeSuccessor,  PlaceHLAPI sourcePlace, UnitGraph graph, Queue<Pair<Unit, PlaceHLAPI>> worklist, Set<Unit> visitedUnits, SootMethod method) {
         // This case implies a direct P -> P flow which isn't standard in P/T nets.
         // Usually P -> T -> P'. Need to re-evaluate when this is called.
         // Example: After ExitMonitor, the transition T_exit produces token in P_after_exit AND P_lock.
@@ -522,19 +531,19 @@ public class PetriNetBuilder {
             }
         } else {
             for (Unit successor : successors) {
-                PlaceHLAPI placeBeforeSuccessor = getOrCreatePlaceBeforeUnit(successor, method);
+                //PlaceHLAPI placeBeforeSuccessor = getOrCreatePlaceBeforeUnit(successor, method);
                 // Need a transition between sourcePlace and placeBeforeSuccessor
-                TransitionHLAPI implicitStep = createTransition("step_" + sourcePlace.getId() + "_to_" + placeBeforeSuccessor.getId(), this.mainPage);
-                createArc(sourcePlace, implicitStep, this.mainPage);
-                createArc(implicitStep, placeBeforeSuccessor, this.mainPage);
-                addUnitToWorklist(successor, placeBeforeSuccessor, worklist, visitedUnits);
+                //TransitionHLAPI implicitStep = createTransition("step_" + sourcePlace.getId() + "_to_" + beforeSuccessor.getId(), this.mainPage);
+                //createArc(sourcePlace, implicitStep, this.mainPage);
+                //createArc(implicitStep, beforeSuccessor, this.mainPage);
+                addUnitToWorklist(successor, beforeSuccessor, worklist, visitedUnits);
             }
         }
     }
 
     private PlaceHLAPI getOrCreateUnitExitPlace(Unit unit, SootMethod method) {
         Pair<SootMethod, Unit> key = new Pair<>(method, unit);
-        return unitExitPlaces.computeIfAbsent(key, k -> createPlace("after_" + escapeXml(method.getSignature()), this.mainPage));
+        return unitExitPlaces.computeIfAbsent(key, k -> createPlace("after_" + escapeXml(unit.toString()), this.mainPage));
     }
 
     /**
