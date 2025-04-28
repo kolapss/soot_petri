@@ -8,6 +8,7 @@ import boomerang.util.AccessPath;
 import javafx.util.Pair;
 import soot.*;
 import soot.jimple.internal.JAssignStmt;
+import soot.jimple.internal.JIdentityStmt;
 import soot.jimple.internal.JInstanceFieldRef;
 
 import java.util.List;
@@ -61,6 +62,17 @@ public class AliasingAnalysis {
                         SparseAliasManager.getInstance(sparsificationStrategy, ignoreAfterQuery);
                 return sparseAliasManager.getAliases(stmt, method, leftOp);
             }
+            if(unit instanceof JIdentityStmt) {
+                JIdentityStmt stmt = (JIdentityStmt) unit;
+                Value leftOp = stmt.getLeftOp();
+                if (leftOp instanceof JInstanceFieldRef) {
+                    // get base
+                    leftOp = ((JInstanceFieldRef) leftOp).getBase();
+                }
+                SparseAliasManager sparseAliasManager =
+                        SparseAliasManager.getInstance(sparsificationStrategy, ignoreAfterQuery);
+                return sparseAliasManager.getAliases(stmt, method, leftOp);
+            }
         }
         throw new RuntimeException(
                 "Query Variable not found. Does variable:"
@@ -87,7 +99,7 @@ public class AliasingAnalysis {
             String queryLHS,
             SparseCFGCache.SparsificationStrategy sparsificationStrategy,
             boolean ignoreAfterQuery) {
-        registerSootTransformers(queryLHS, sparsificationStrategy, targetMethod, ignoreAfterQuery);
+        registerSootTransformers(queryLHS, sparsificationStrategy, targetMethod, targetClassName, ignoreAfterQuery);
         executeSootTransformers();
         return aliases;
     }
@@ -96,12 +108,13 @@ public class AliasingAnalysis {
             String queryLHS,
             SparseCFGCache.SparsificationStrategy sparsificationStrategy,
             String targetMethod,
+            String targetClassName,
             boolean ignoreAfterQuery) {
         Transform transform =
                 new Transform(
                         "wjtp.ifds",
                         createAnalysisTransformer(
-                                queryLHS, sparsificationStrategy, targetMethod, ignoreAfterQuery));
+                                queryLHS, sparsificationStrategy, targetMethod,targetClassName, ignoreAfterQuery));
         try {
             PackManager.v().getPack("wjtp").add(transform);
         } catch (Exception e) {
@@ -118,39 +131,33 @@ public class AliasingAnalysis {
         BoomerangPretransformer.v().reset();
         BoomerangPretransformer.v().apply();
         PackManager.v().getPack("wjtp").apply();
+        PackManager.v().getPack("wjtp").remove("wjtp.ifds");
     }
 
     protected Transformer createAnalysisTransformer(
             String queryLHS,
             SparseCFGCache.SparsificationStrategy sparsificationStrategy,
             String targetMethod,
+            String targetClassName,
             boolean ignoreAfterQuery) {
         return new SceneTransformer() {
             @Override
             protected void internalTransform(String phaseName, Map<String, String> options) {
-                aliases =
-                        getAliases(
-                                getEntryPointMethod(targetMethod),
-                                queryLHS,
-                                sparsificationStrategy,
-                                ignoreAfterQuery);
+                aliases = getAliases(getEntryPointMethod(targetMethod,targetClassName), queryLHS, sparsificationStrategy, ignoreAfterQuery);
             }
         };
     }
 
-    protected SootMethod getEntryPointMethod(String targetMethod) {
+    protected SootMethod getEntryPointMethod(String targetMethod, String className) {
         for (SootClass c : Scene.v().getApplicationClasses()) {
             for (SootMethod m : c.getMethods()) {
                 if (!m.hasActiveBody()) {
                     continue;
                 }
-                if (targetMethod != null && m.getName().equals(targetMethod)) {
+                if (targetMethod != null && m.getName().equals(targetMethod) && m.getDeclaringClass().getName().equals(className)) {
                     return m;
                 }
-                if (m.getName().equals("entryPoint")
-                        || m.toString().contains("void main(java.lang.String[])")) {
-                    return m;
-                }
+
             }
         }
         throw new IllegalArgumentException("Method does not exist in scene!");

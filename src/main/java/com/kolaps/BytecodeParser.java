@@ -3,8 +3,14 @@ package com.kolaps;
 import com.kolaps.utils.RetroLambda;
 import soot.*;
 import soot.options.Options;
+import soot.toolkits.graph.BriefUnitGraph;
+import soot.toolkits.graph.ExceptionalUnitGraph;
+import soot.toolkits.graph.TrapUnitGraph;
+import soot.toolkits.graph.UnitGraph;
 
 import java.io.IOException;
+import java.util.Collections;
+import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.jar.Attributes;
@@ -46,6 +52,8 @@ public class BytecodeParser {
         mainClass.getMethods();
         SootMethod mainMethod = mainClass.getMethodByName("main");
         System.out.println(mainMethod.retrieveActiveBody());
+
+
         PointerAnalysis.setupAnalyze();
         builder.build(mainClass);
 
@@ -76,12 +84,14 @@ public class BytecodeParser {
 
         Options.v().set_soot_classpath(sootClassPath);
         Options.v().set_prepend_classpath(true);
+        Options.v().set_process_dir(Collections.singletonList(path));
         // Options.v().set_main_class(this.getTargetClass());
         Scene.v().loadNecessaryClasses();
         SootClass c = Scene.v().forceResolve(mainClass, SootClass.BODIES);
         if (c != null) {
             c.setApplicationClass();
         }
+
         for (SootMethod m : c.getMethods()) {
             System.out.println(m);
         }
