@@ -8,8 +8,9 @@ public class PetriNetModeler {
 
     private static int transitionCounter = 0;
     private static int placeCounter = 0;
+    private  static int arcCounter = 0;
     public static ArcHLAPI createArc(PlaceHLAPI source, TransitionHLAPI target, PageHLAPI page) {
-        String id = "arc_" + source.getId() + "_" + target.getId();
+        String id = "arc_" + source.getId() + "_" + target.getId()+arcCounter++;
         ArcHLAPI arc = null; // Вес дуги = 1.0 (обычно)
         try {
             arc = new ArcHLAPI(id, source, target, page);
