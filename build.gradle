@@ -26,8 +26,8 @@ dependencies {
 
 
 
-    //implementation 'de.fraunhofer.iem:boomerangPDS:4.0.0'
-    //implementation 'de.fraunhofer.iem:boomerangScope-Soot:4.0.0'
+    /*implementation 'de.fraunhofer.iem:boomerangPDS:4.1.0'
+    implementation 'de.fraunhofer.iem:boomerangScope-Soot:4.1.0'*/
 
     implementation(fileTree('libs') { include '*.jar' })
 
@@ -40,6 +40,12 @@ dependencies {
 tasks.withType(Javadoc) {
     options.encoding = 'UTF-8'
     options.memberLevel = JavadocMemberLevel.PRIVATE
+}
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(11) // Здесь ставишь нужную версию
+    }
 }
 
 test {

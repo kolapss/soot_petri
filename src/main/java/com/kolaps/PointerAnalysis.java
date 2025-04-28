@@ -5,6 +5,7 @@ import boomerang.results.AbstractBoomerangResults;
 import boomerang.results.BackwardBoomerangResults;
 import boomerang.scene.*;
 import boomerang.scene.jimple.BoomerangPretransformer;
+import boomerang.scene.jimple.IntAndStringBoomerangOptions;
 import boomerang.scene.jimple.JimpleStatement;
 import boomerang.scene.jimple.SootCallGraph;
 import boomerang.util.AccessPath;
@@ -29,23 +30,25 @@ public class PointerAnalysis {
     //public static Boomerang solver;
 
     public static void setupAnalyze() {
-        PackManager.v().getPack("cg").apply();
-        BoomerangPretransformer.v().apply();
+        /*PackManager.v().getPack("cg").apply();
+        BoomerangPretransformer.v().apply();*/
     }
 
 
     public static String getAllocSite(Unit unit, SootMethod method) {
+        allAliases=null;
+        allocSites=null;
         Transformer executor = new SceneTransformer() {
             protected void internalTransform(
                     String phaseName, @SuppressWarnings("rawtypes") Map options) {
                 SootClass cl = method.getDeclaringClass();
                 String var;
                 if (unit instanceof JEnterMonitorStmt) {
-                    var = ((JEnterMonitorStmt) unit).getOp().toString() + " =";
+                    var = ((JEnterMonitorStmt) unit).getOp().toString();
                 }
                 else
                 {
-                    var = ((JExitMonitorStmt) unit).getOp().toString() + " =";
+                    var = ((JExitMonitorStmt) unit).getOp().toString();
                 }
                 SootCallGraph sootCallGraph = new SootCallGraph();
                 AnalysisScope scope = new AnalysisScope(sootCallGraph) {
@@ -55,7 +58,7 @@ public class PointerAnalysis {
                         JimpleStatement statement = (JimpleStatement) seed.getStart();
 
 
-                        if (statement.getDelegate().toString().contains(var) && statement.getMethod().getDeclaringClass().getName().equals(cl.getName())) {
+                        if ((statement.getDelegate().toString().contains(var+" =")|| statement.getDelegate().toString().contains(var+" :=")) && statement.getMethod().getDeclaringClass().getName().equals(cl.getName())) {
                             value = statement.getLeftOp();
                             lastEdge = seed;
                         }
@@ -80,8 +83,10 @@ public class PointerAnalysis {
                         return false;
                     }
                 };
+
+
                 // 1. Create a Boomerang solver.
-                Boomerang solver = new Boomerang(sootCallGraph, dat, new DefaultBoomerangOptions());
+                Boomerang solver = new Boomerang(sootCallGraph, SootDataFlowScope.make(Scene.v()), new MyBoomerangOptions());
 
                 // 2. Submit a query to the solver.
                 Collection<boomerang.Query> seeds = scope.computeSeeds();
@@ -147,8 +152,9 @@ public class PointerAnalysis {
                         return false;
                     }
                 };
+                //MyBoomerangOptions boomerangOptions = new MyBoomerangOptions();
                 // 1. Create a Boomerang solver.
-                Boomerang solver = new Boomerang(sootCallGraph, dat, new DefaultBoomerangOptions());
+                Boomerang solver = new Boomerang(sootCallGraph, dat, new MyBoomerangOptions());
 
                 // 2. Submit a query to the solver.
                 Collection<boomerang.Query> seeds = scope.computeSeeds();

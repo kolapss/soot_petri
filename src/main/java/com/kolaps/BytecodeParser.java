@@ -1,10 +1,7 @@
 package com.kolaps;
 
 import com.kolaps.utils.RetroLambda;
-import soot.G;
-import soot.Scene;
-import soot.SootClass;
-import soot.SootMethod;
+import soot.*;
 import soot.options.Options;
 
 import java.io.IOException;
@@ -45,6 +42,7 @@ public class BytecodeParser {
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
+        //PackManager.v().writeOutput();
         mainClass.getMethods();
         SootMethod mainMethod = mainClass.getMethodByName("main");
         System.out.println(mainMethod.retrieveActiveBody());
@@ -58,11 +56,12 @@ public class BytecodeParser {
         G.v().reset();
         Options.v().set_whole_program(true);
         Options.v().setPhaseOption("cg.spark", "on");
+        Options.v().setPhaseOption("cg", "all-reachable:true");
         Options.v().set_output_format(Options.output_format_none);
         Options.v().set_no_bodies_for_excluded(true);
         Options.v().set_allow_phantom_refs(true);
 
-        List<String> includeList = new LinkedList<String>();
+        /*List<String> includeList = new LinkedList<String>();
         includeList.add("java.lang.*");
         includeList.add("java.util.*");
         includeList.add("java.io.*");
@@ -71,8 +70,9 @@ public class BytecodeParser {
         includeList.add("javax.servlet.*");
         includeList.add("javax.crypto.*");
 
-        Options.v().set_include(includeList);
+        Options.v().set_include(includeList);*/
         Options.v().setPhaseOption("jb", "use-original-names:true");
+        Options.v().setPhaseOption("jb.sils", "enabled:false");
 
         Options.v().set_soot_classpath(sootClassPath);
         Options.v().set_prepend_classpath(true);
