@@ -158,6 +158,7 @@ public class SparseAliasManager {
                                             } // boomerangSolver.unregisterAllListeners();
                                             // boomerangSolver.unregisterAllListeners();
                                             queryCache.put(query, aliases);
+                                            //boomerangSolver.unregisterAllListeners();
                                         }
                                         return aliases;
                                     }
