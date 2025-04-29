@@ -20,6 +20,7 @@ import java.util.jar.Manifest;
 public class BytecodeParser {
 
     public static String path = null;
+    public static String mainClassName = null;
 
     public static String getMainClass(String jarFilePath) throws IOException {
         try (JarFile jarFile = new JarFile(jarFilePath)) {
@@ -32,22 +33,22 @@ public class BytecodeParser {
         return null;
     }
 
-    public static void setPath(String path) {path = path;}
+    public static void setPath(String pathh) {path = pathh;}
 
     public static void parseProgram(String mypath, PetriNetBuilder builder) {
         path = mypath;
+        try {
+            mainClassName = getMainClass(path);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
         RetroLambda.run(mypath);
         SootClass mainClass;
-        try {
-            setupSoot(mypath, getMainClass(mypath));
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
-        try {
-            mainClass = Scene.v().loadClassAndSupport(getMainClass(mypath));
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
+
+        setupSoot(path);
+
+        mainClass = Scene.v().getMainClass();
+
         //PackManager.v().writeOutput();
         mainClass.getMethods();
         SootMethod mainMethod = mainClass.getMethodByName("main");
@@ -60,7 +61,7 @@ public class BytecodeParser {
     }
 
 
-    private static void setupSoot(String sootClassPath, String mainClass) {
+    private static void setupSoot(String sootClassPath) {
         G.v().reset();
         Options.v().set_whole_program(true);
         Options.v().setPhaseOption("cg.spark", "on");
@@ -87,7 +88,7 @@ public class BytecodeParser {
         Options.v().set_process_dir(Collections.singletonList(path));
         // Options.v().set_main_class(this.getTargetClass());
         Scene.v().loadNecessaryClasses();
-        SootClass c = Scene.v().forceResolve(mainClass, SootClass.BODIES);
+        SootClass c = Scene.v().forceResolve(Scene.v().getMainClass().getName(), SootClass.BODIES);
         if (c != null) {
             c.setApplicationClass();
         }
