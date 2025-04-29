@@ -97,6 +97,11 @@ public class SparseAliasManager {
         public boolean trackAnySubclassOfThrowable() {
             return true;
         }
+
+        @Override
+        public boolean trackStaticFieldAtEntryPointToClinit() {
+            return true;
+        }
     }
 
     private static Duration totalAliasingDuration;

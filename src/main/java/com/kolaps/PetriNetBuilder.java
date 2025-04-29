@@ -7,6 +7,7 @@ import boomerang.scene.jimple.JimpleMethod;
 import boomerang.scene.jimple.JimpleVal;
 import boomerang.util.AccessPath;
 import com.kolaps.analyses.AliasingAnalysis;
+import com.kolaps.analyses.SparseAliasManager;
 import fr.lip6.move.pnml.framework.general.PnmlExport;
 import fr.lip6.move.pnml.framework.utils.ModelRepository;
 import fr.lip6.move.pnml.framework.utils.exception.*;
@@ -123,7 +124,7 @@ public class PetriNetBuilder {
             e.printStackTrace();
             return null; // Indicate failure
         }
-        createArc(mainPlaceEnd, this.endTransition, this.mainPage);
+        //createArc(mainPlaceEnd, this.endTransition, this.mainPage);
         createArc(this.endTransition, endPlace, this.mainPage);
 
         // Return the constructed net
@@ -217,6 +218,9 @@ public class PetriNetBuilder {
 
             System.out.println("  Processing Unit: " + formatUnit(currentUnit) + " [Entry Place: "
                     + currentUnitEntryPlace.getId() + "]");
+            if(currentUnit.toString().contains("thread2") && currentUnit.toString().contains("start()")) {
+                System.out.println("test");
+            }
 
             // --- Handle different statement types ---
             if (currentUnit instanceof EnterMonitorStmt) {
@@ -763,6 +767,25 @@ public class PetriNetBuilder {
                 Map.Entry<ForwardQuery, AbstractBoomerangResults.Context> firstEntry = res.entrySet().iterator().next();
                 ForwardQuery firstKey = firstEntry.getKey();
                 strAllocValue = firstKey.var().toString();
+            }
+            else
+            {
+                Optional<Unit> unitOp =
+                        contextMethod.getActiveBody().getUnits().stream()
+                                .filter(e -> e.toString().startsWith(lockRef.toString()))
+                                .findFirst();
+                if (unitOp.isPresent()) {
+                    Unit unit = unitOp.get();
+                    if (unit instanceof JAssignStmt) {
+                        JAssignStmt stmt = (JAssignStmt) unit;
+                        Value leftOp = stmt.getLeftOp();
+                    }
+                    if(unit instanceof JIdentityStmt) {
+                        JIdentityStmt stmt = (JIdentityStmt) unit;
+                        Value leftOp = stmt.getLeftOp();
+                    }
+                }
+                strAllocValue = lockRef.toString()+" ("+contextMethod.getDeclaringClass().getName()+"."+contextMethod.getSignature()+")";
             }
         } catch (Exception e) {
             if (e.getMessage() != null && e.getMessage().startsWith("Query Variable not found")) {
