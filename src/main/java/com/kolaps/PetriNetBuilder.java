@@ -458,30 +458,9 @@ public class PetriNetBuilder {
             }
         } else {
             this.mainPage.removeObjectsHLAPI(entryIfPlace);
-            handleSuccessors(stmt,currentPlace,afterPlace,graph,ifWorklist,visitedUnits,method,endPlaceMethod);
+            handleSuccessors(endTrueBrunch,currentPlace,afterPlace,graph,worklist,visitedUnits,method,endPlaceMethod);
         }
 
-
-
-        // --- True Branch ---
-        /*TransitionHLAPI trueTransition = createTransition("if_true_" + currentPlace.getId().hashCode(),this.mainPage);
-        createArc(currentPlace, trueTransition,this.mainPage);
-        PlaceHLAPI targetPlace = getOrCreateUnitEntryPlace(targetUnit, method); // Entry place of the target unit
-        createArc(trueTransition, targetPlace, this.mainPage);
-        addUnitToWorklist(targetUnit, targetPlace, worklist, visitedUnits);
-
-
-        // --- False Branch ---
-        if (fallThroughUnit != null) {
-            TransitionHLAPI falseTransition = createTransition("if_false_" + currentPlace.getId().hashCode(),this.mainPage);
-            createArc(currentPlace, falseTransition, this.mainPage);
-            PlaceHLAPI fallThroughPlace = getOrCreateUnitEntryPlace(fallThroughUnit, method); // Entry place of the fall-through unit
-            createArc(falseTransition, fallThroughPlace,this.mainPage);
-            addUnitToWorklist(fallThroughUnit, currentPlace, worklist, visitedUnits);
-        } else {
-            // If no fallthrough, the false transition leads nowhere in this model
-            System.out.println("      (False branch has no successor unit)");
-        }*/
     }
 
     private PlaceHLAPI getOrCreateUnitEntryPlace(Unit unit, SootMethod method) {
