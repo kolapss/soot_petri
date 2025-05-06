@@ -149,7 +149,7 @@ public class SparseAliasManager {
                                                     boomerangSolver.solve(query);
 
                                             aliases = new Pair<>(results.getAllAliases(),results.getAllocationSites());
-                                            allocsites = results.getAllocationSites();
+                                            //allocsites = results.getAllocationSites();
                                             boolean debug = false;
                                             if (debug) {
                                                 System.out.println(query);
