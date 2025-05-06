@@ -7,6 +7,7 @@ import boomerang.scene.jimple.JimpleMethod;
 import boomerang.scene.jimple.JimpleVal;
 import boomerang.util.AccessPath;
 import com.kolaps.analyses.AliasingAnalysis;
+import com.kolaps.analyses.BoomAnalysis;
 import com.kolaps.analyses.SparseAliasManager;
 import fr.lip6.move.pnml.framework.general.PnmlExport;
 import fr.lip6.move.pnml.framework.utils.ModelRepository;
@@ -218,7 +219,7 @@ public class PetriNetBuilder {
 
             System.out.println("  Processing Unit: " + formatUnit(currentUnit) + " [Entry Place: "
                     + currentUnitEntryPlace.getId() + "]");
-            if(currentUnit.toString().contains("thread2") && currentUnit.toString().contains("start()")) {
+            if (currentUnit.toString().contains("thread2") && currentUnit.toString().contains("start()")) {
                 System.out.println("test");
             }
 
@@ -233,7 +234,7 @@ public class PetriNetBuilder {
                 processInvoke(currentUnit, currentUnitEntryPlace, afterPlace, graph, worklist, visitedUnits, method,
                         visitedOnPath, endPlaceMethod);
             } else if (currentUnit instanceof IfStmt) {
-                processIf((IfStmt) currentUnit, currentUnitEntryPlace, graph, worklist, visitedUnits, method);
+                processIf((IfStmt) currentUnit, currentUnitEntryPlace, afterPlace, graph, worklist, visitedUnits, method, endPlaceMethod, visitedOnPath);
             } else if (currentUnit instanceof JGotoStmt) {
                 processGoto((JGotoStmt) currentUnit, currentUnitEntryPlace, graph, worklist, visitedUnits, method);
             } else if (currentUnit instanceof LookupSwitchStmt || currentUnit instanceof TableSwitchStmt) {
@@ -313,9 +314,181 @@ public class PetriNetBuilder {
                                Queue<Pair<Unit, PlaceHLAPI>> worklist, Set<Unit> visitedUnits, SootMethod method) {
     }
 
+    private PlaceHLAPI processBrunch(SootMethod method, PlaceHLAPI entryPlace, Set<SootMethod> visitedOnPath,
+                                     PlaceHLAPI afterPlace, Queue<Pair<Unit, PlaceHLAPI>> worklist, Unit gotounit) {
 
-    private void processIf(IfStmt currentUnit, PlaceHLAPI currentUnitEntryPlace, UnitGraph graph,
-                           Queue<Pair<Unit, PlaceHLAPI>> worklist, Set<Unit> visitedUnits, SootMethod method) {
+
+        // --- Intra-procedural Worklist Setup ---
+        Body body = method.getActiveBody();
+        BriefUnitGraph graph = new BriefUnitGraph(body); // Use BriefUnitGraph!
+
+        Set<Unit> visitedUnits = new HashSet<>(); // Units processed in this method activation
+
+        MyPlace endPlaceMethod = new MyPlace(entryPlace);
+        endPlaceMethod.setPlace(null);
+
+        // --- Worklist Processing Loop ---
+        while (!worklist.isEmpty()) {
+            Pair<Unit, PlaceHLAPI> currentPair = worklist.poll();
+            Unit currentUnit = currentPair.getKey();
+            PlaceHLAPI currentUnitEntryPlace = currentPair.getValue(); // Place BEFORE executing currentUnit
+
+            System.out.println("  Processing Unit: " + formatUnit(currentUnit) + " [Entry Place: "
+                    + currentUnitEntryPlace.getId() + "]");
+            if (currentUnit.toString().contains("thread2") && currentUnit.toString().contains("start()")) {
+                System.out.println("test");
+            }
+
+            // --- Handle different statement types ---
+            if (currentUnit instanceof EnterMonitorStmt) {
+                processEnterMonitor((EnterMonitorStmt) currentUnit, currentUnitEntryPlace, afterPlace, graph, worklist,
+                        visitedUnits, method, endPlaceMethod);
+            } else if (currentUnit instanceof ExitMonitorStmt) {
+                processExitMonitor((ExitMonitorStmt) currentUnit, currentUnitEntryPlace, afterPlace, graph, worklist,
+                        visitedUnits, method, endPlaceMethod);
+            } else if (currentUnit instanceof InvokeStmt) {
+                processInvoke(currentUnit, currentUnitEntryPlace, afterPlace, graph, worklist, visitedUnits, method,
+                        visitedOnPath, endPlaceMethod);
+            } else if (currentUnit instanceof IfStmt) {
+                processIf((IfStmt) currentUnit, currentUnitEntryPlace, afterPlace, graph, worklist, visitedUnits, method, endPlaceMethod, visitedOnPath);
+            } else if (currentUnit instanceof JGotoStmt) {
+                processGoto((JGotoStmt) currentUnit, currentUnitEntryPlace, graph, worklist, visitedUnits, method);
+            } else if (currentUnit instanceof LookupSwitchStmt || currentUnit instanceof TableSwitchStmt) {
+                processSwitch((SwitchStmt) currentUnit, currentUnitEntryPlace, graph, worklist, visitedUnits, method);
+            } else if (currentUnit.equals(gotounit)) {
+                worklist.clear();
+            } else if (currentUnit instanceof ThrowStmt) {
+                processThrow((ThrowStmt) currentUnit, currentUnitEntryPlace, graph, worklist, visitedUnits, method);
+            }
+            // Add more handlers if needed (e.g., AssignStmt if tracking specific values
+            // matters)
+            else {
+                // Default: sequential execution for unhandled instructions
+                processDefault(currentUnit, currentUnitEntryPlace, graph, worklist, visitedUnits, method, endPlaceMethod);
+            }
+        } // End worklist loop
+
+        System.out.println("Finished traversing method: " + method.getSignature());
+        return endPlaceMethod.getPlace();
+    }
+
+
+    private void processIf(IfStmt stmt, PlaceHLAPI currentPlace, PlaceHLAPI afterPlace, UnitGraph graph, Queue<Pair<Unit, PlaceHLAPI>> worklist, Set<Unit> visitedUnits, SootMethod method, MyPlace endPlaceMethod, Set<SootMethod> visitedOnPath) {
+        System.out.println("    Branch: " + stmt.getCondition());
+
+        // 'If' has two potential successors: the target (if condition true) and the fall-through (if false)
+        List<Unit> successors = graph.getSuccsOf(stmt);
+        Unit falseUnit = stmt.getTarget();
+        Unit trueUnit = null;
+        //Определяем начало true и false юнитов
+        for (Unit successor : successors) {
+            if (falseUnit != successor) {
+                trueUnit = successor;
+                break;
+            }
+        }
+        Queue<Unit> trueList = new LinkedList<Unit>();
+        trueList.add(trueUnit);
+        Iterator<Unit> it = graph.iterator();
+        Unit cUnit = it.next();
+        //Ищем начало true блока в графе
+        while (!cUnit.equals(trueUnit)) {
+            cUnit = it.next();
+        }
+        //Заполняем true список юнитами
+        while (true) {
+            cUnit = it.next();
+            if (cUnit instanceof JGotoStmt || cUnit.equals(falseUnit)) {
+                break;
+            }
+            trueList.add(cUnit);
+        }
+        PlaceHLAPI entryIfPlace = createPlace(escapeXml("entry_" + stmt.toString()), this.mainPage);
+        Queue<Pair<Unit, PlaceHLAPI>> ifWorklist = new ArrayDeque<>();
+        Pair<Unit, PlaceHLAPI> key = new Pair<>(trueUnit, entryIfPlace);
+        ifWorklist.add(key);
+        boolean isIfElse = !cUnit.equals(falseUnit);
+        Unit endTrueBrunch = cUnit;
+        Queue<Unit> falseList = new LinkedList<Unit>();
+        if (isIfElse) {
+            //If c else
+            Unit endIfUnit = ((JGotoStmt) cUnit).getTarget();
+            //Заполняем false список юнитами
+            while (true) {
+                cUnit = it.next();
+                if (cUnit.equals(endIfUnit)) {
+                    break;
+                }
+                falseList.add(cUnit);
+            }
+            //PlaceHLAPI endIF = processBrunch(method,entryIfPlace,visitedOnPath,afterPlace, worklist, endTrueBrunch);
+        }
+
+        //Если if без else
+        PlaceHLAPI endIfFalsePlace;
+        PlaceHLAPI endIfTruePlace = processBrunch(method, entryIfPlace, visitedOnPath, afterPlace, ifWorklist, endTrueBrunch);
+        PlaceHLAPI endIfPlace;
+        if (endIfTruePlace != null) {
+            TransitionHLAPI brunchStartTransition = createTransition("startIf_" + entryIfPlace.getId(), this.mainPage);
+            createArc(currentPlace, brunchStartTransition, this.mainPage);
+            createArc(brunchStartTransition, entryIfPlace, this.mainPage);
+            TransitionHLAPI endIfTransition = createTransition("endTrueIf_" + endIfTruePlace.getId(), this.mainPage);
+            createArc(endIfTruePlace, endIfTransition, this.mainPage);
+            endIfPlace = createPlace("endIf_" + entryIfPlace.getId(), this.mainPage);
+            createArc(endIfTransition, endIfPlace, this.mainPage);
+            if (falseList.isEmpty()) { //Если нет блока else, то просто соединяем entryIfPlace c endIfPlace
+                TransitionHLAPI elseTransition = createTransition("else_" + entryIfPlace.getId(), this.mainPage);
+                createArc(currentPlace, elseTransition, this.mainPage);
+                createArc(elseTransition, endIfPlace, this.mainPage);
+                endPlaceMethod.setPlace(endIfPlace);
+                handleSuccessors(endTrueBrunch,endIfPlace,afterPlace,graph,worklist,visitedUnits,method,endPlaceMethod);
+            } else { //Обрабатываем ветку else
+                endIfFalsePlace = processBrunch(method, entryIfPlace, visitedOnPath, afterPlace, ifWorklist, endTrueBrunch);
+                if (endIfFalsePlace != null) {
+                    TransitionHLAPI endFalseTransition = createTransition("endFalse_" + entryIfPlace.getId(), this.mainPage);
+                    createArc(endIfFalsePlace, endFalseTransition, this.mainPage);
+                    createArc(endFalseTransition, endIfPlace, this.mainPage);
+                } else {
+                    TransitionHLAPI elseTransition = createTransition("else_" + entryIfPlace.getId(), this.mainPage);
+                    createArc(currentPlace, elseTransition, this.mainPage);
+                    createArc(elseTransition, endIfPlace, this.mainPage);
+                }
+                endPlaceMethod.setPlace(endIfPlace);
+                handleSuccessors(endTrueBrunch,endIfPlace,afterPlace,graph,worklist,visitedUnits,method,endPlaceMethod);
+            }
+        } else {
+            this.mainPage.removeObjectsHLAPI(entryIfPlace);
+            handleSuccessors(stmt,currentPlace,afterPlace,graph,ifWorklist,visitedUnits,method,endPlaceMethod);
+        }
+
+
+
+        // --- True Branch ---
+        /*TransitionHLAPI trueTransition = createTransition("if_true_" + currentPlace.getId().hashCode(),this.mainPage);
+        createArc(currentPlace, trueTransition,this.mainPage);
+        PlaceHLAPI targetPlace = getOrCreateUnitEntryPlace(targetUnit, method); // Entry place of the target unit
+        createArc(trueTransition, targetPlace, this.mainPage);
+        addUnitToWorklist(targetUnit, targetPlace, worklist, visitedUnits);
+
+
+        // --- False Branch ---
+        if (fallThroughUnit != null) {
+            TransitionHLAPI falseTransition = createTransition("if_false_" + currentPlace.getId().hashCode(),this.mainPage);
+            createArc(currentPlace, falseTransition, this.mainPage);
+            PlaceHLAPI fallThroughPlace = getOrCreateUnitEntryPlace(fallThroughUnit, method); // Entry place of the fall-through unit
+            createArc(falseTransition, fallThroughPlace,this.mainPage);
+            addUnitToWorklist(fallThroughUnit, currentPlace, worklist, visitedUnits);
+        } else {
+            // If no fallthrough, the false transition leads nowhere in this model
+            System.out.println("      (False branch has no successor unit)");
+        }*/
+    }
+
+    private PlaceHLAPI getOrCreateUnitEntryPlace(Unit unit, SootMethod method) {
+
+        Pair<SootMethod, Unit> key = new Pair<>(method, unit); // Reuse Pair for consistency
+        return unitExitPlaces.computeIfAbsent(key, k -> createPlace("entry_" + method.getName() + "_ln" + unit.getJavaSourceStartLineNumber() + "_" + unit.hashCode(), this.mainPage));
+
     }
 
     private void processInvoke(Unit unit, PlaceHLAPI currentPlace, PlaceHLAPI afterPlace, UnitGraph graph,
@@ -761,15 +934,14 @@ public class PetriNetBuilder {
         // или его строковое представление. НУЖНА НАДЕЖНАЯ СТРАТЕГИЯ ИДЕНТИФИКАЦИИ!
         String strAllocValue = null;
         try {
-            Pair<Set<AccessPath>, Map<ForwardQuery, AbstractBoomerangResults.Context>> ali = analyzer.runAnalyses(lockRef.toString(), contextMethod.getDeclaringClass().getName(), contextMethod.getName());
+            Pair<Set<AccessPath>, Map<ForwardQuery, AbstractBoomerangResults.Context>> ali = BoomAnalysis.runAnalysis(contextMethod, lockRef.toString());
+            //Pair<Set<AccessPath>, Map<ForwardQuery, AbstractBoomerangResults.Context>> ali = analyzer.runAnalyses(lockRef.toString(), contextMethod.getDeclaringClass().getName(), contextMethod.getName());
             Map<ForwardQuery, AbstractBoomerangResults.Context> res = ali.getValue();
             if (!res.isEmpty()) {
                 Map.Entry<ForwardQuery, AbstractBoomerangResults.Context> firstEntry = res.entrySet().iterator().next();
                 ForwardQuery firstKey = firstEntry.getKey();
                 strAllocValue = firstKey.var().toString();
-            }
-            else
-            {
+            } else {
                 Optional<Unit> unitOp =
                         contextMethod.getActiveBody().getUnits().stream()
                                 .filter(e -> e.toString().startsWith(lockRef.toString()))
@@ -780,12 +952,12 @@ public class PetriNetBuilder {
                         JAssignStmt stmt = (JAssignStmt) unit;
                         Value leftOp = stmt.getLeftOp();
                     }
-                    if(unit instanceof JIdentityStmt) {
+                    if (unit instanceof JIdentityStmt) {
                         JIdentityStmt stmt = (JIdentityStmt) unit;
                         Value leftOp = stmt.getLeftOp();
                     }
                 }
-                strAllocValue = lockRef.toString()+" ("+contextMethod.getDeclaringClass().getName()+"."+contextMethod.getSignature()+")";
+                strAllocValue = lockRef.toString() + " (" + contextMethod.getDeclaringClass().getName() + "." + contextMethod.getSignature() + ")";
             }
         } catch (Exception e) {
             if (e.getMessage() != null && e.getMessage().startsWith("Query Variable not found")) {
@@ -869,7 +1041,8 @@ public class PetriNetBuilder {
         String targetClass = contextMethod.getDeclaringClass().toString();
         JVirtualInvokeExpr expp = (JVirtualInvokeExpr) ((JInvokeStmt) invokeStmt).getInvokeExpr();
         String query = expp.getBase().toString();
-        Pair<Set<AccessPath>, Map<ForwardQuery, AbstractBoomerangResults.Context>> ali = analyzer.runAnalyses(query, targetClass, contextMethod.getName());
+        Pair<Set<AccessPath>, Map<ForwardQuery, AbstractBoomerangResults.Context>> ali = BoomAnalysis.runAnalysis(contextMethod, query);
+        //Pair<Set<AccessPath>, Map<ForwardQuery, AbstractBoomerangResults.Context>> ali = analyzer.runAnalyses(query, targetClass, contextMethod.getName());
 
         if (!startClass.toString().equals("java.lang.Thread")) {
             return startClass.getMethod("void run()");

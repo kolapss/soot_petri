@@ -1,7 +1,11 @@
 package com.kolaps.analyses;
 
+import boomerang.Boomerang;
 import boomerang.ForwardQuery;
+import boomerang.WeightedBoomerang;
 import boomerang.results.AbstractBoomerangResults;
+import boomerang.scene.ControlFlowGraph;
+import boomerang.scene.Val;
 import boomerang.scene.jimple.BoomerangPretransformer;
 import boomerang.scene.sparse.SparseCFGCache;
 import boomerang.util.AccessPath;
@@ -10,6 +14,9 @@ import soot.*;
 import soot.jimple.internal.JAssignStmt;
 import soot.jimple.internal.JIdentityStmt;
 import soot.jimple.internal.JInstanceFieldRef;
+import soot.jimple.toolkits.ide.icfg.JimpleBasedInterproceduralCFG;
+import sync.pds.solver.nodes.INode;
+import wpds.impl.Weight;
 
 import java.util.List;
 import java.util.Map;
