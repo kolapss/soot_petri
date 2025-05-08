@@ -80,8 +80,8 @@ public class BytecodeParser {
         includeList.add("javax.crypto.*");
 
         Options.v().set_include(includeList);*/
-        /*Options.v().setPhaseOption("jb", "use-original-names:true");
-        Options.v().setPhaseOption("jb.sils", "enabled:false");*/
+        Options.v().setPhaseOption("jb", "use-original-names:true");
+        Options.v().setPhaseOption("jb.sils", "enabled:false");
 
         Options.v().set_soot_classpath(sootClassPath);
         Options.v().set_prepend_classpath(true);
