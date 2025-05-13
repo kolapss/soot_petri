@@ -426,7 +426,7 @@ public class PetriNetBuilder {
         Queue<Pair<Unit, PlaceHLAPI>> ifWorklist = new ArrayDeque<>();
         Loop selectedCycle = null;
         for (Loop f : loopNestTree) {
-            if (f.getBackJumpStmt().equals(cUnit)) {
+            if (f.getBackJumpStmt().toString().equals(cUnit.toString())) {
                 selectedCycle = f;
                 break;
             }
@@ -535,9 +535,9 @@ public class PetriNetBuilder {
             if (signature.equals("<java.lang.Thread: void start()>") && invokeExpr instanceof InstanceInvokeExpr) {
                 processThreadStart(unit, (InstanceInvokeExpr) invokeExpr, currentPlace, afterPlace, graph, worklist,
                         visitedUnits, currentMethod, visitedOnPath, endPlaceMethod);
-            } else if ((signature.equals("<java.lang.Object: void wait() throws java.lang.InterruptedException>") ||
-                    signature.equals("<java.lang.Object: void wait(long) throws java.lang.InterruptedException>") ||
-                    signature.equals("<java.lang.Object: void wait(long, int) throws java.lang.InterruptedException>"))
+            } else if ((signature.equals("<java.lang.Object: void wait()>") ||
+                    signature.equals("<java.lang.Object: void wait(long)>") ||
+                    signature.equals("<java.lang.Object: void wait(long, int)>"))
                     && invokeExpr instanceof InstanceInvokeExpr) {
                 processObjectWait(stmt, (InstanceInvokeExpr) invokeExpr, currentPlace, afterPlace, graph, worklist, visitedUnits, currentMethod, endPlaceMethod);
             } else if ((signature.equals("<java.lang.Object: void notify()>") ||
@@ -581,12 +581,13 @@ public class PetriNetBuilder {
 
 
         // --- Wait Transition ---
-        TransitionHLAPI waitTransition = createTransition("wait_" + monitorId, mainPage);
+        TransitionHLAPI waitTransition = createTransition("waitEntry_" + monitorId, mainPage);
         createArc(currentPlace, waitTransition, mainPage);
         createArc(waitTransition, lockPlace, mainPage);
         createArc(waitTransition, waitPlace, mainPage);
 
         PlaceHLAPI afterWaitPlace = createPlace("afterWait_" + monitorId, mainPage);
+        createArc(waitTransition, afterWaitPlace, mainPage);
 
 
         System.out.println("    Added Wait on: " + monitorId + " [Transition: " + waitTransition.getId() + ", Wait Place: " + monitorId + "]");
@@ -602,6 +603,7 @@ public class PetriNetBuilder {
         createArc(afterNotifyPlace, endWaitTransition, mainPage);
         createArc(lockPlace, endWaitTransition, mainPage);
         PlaceHLAPI placeAfterWait = createPlace("endWait_" + monitorId, mainPage);
+        createArc(endWaitTransition, placeAfterWait, mainPage);
         endPlaceMethod.setPlace(placeAfterWait);
 
         // Add successor AFTER wait to the worklist (originating from placeAfterWait)
@@ -739,9 +741,9 @@ public class PetriNetBuilder {
             // A full analysis requires considering all paths in the final Petri net.
             try {
                 PlaceHLAPI endInvokePlace = traverseMethod(runMethod, runEntryPlace, new HashSet<>(visitedOnPath), afterPlace); // Use copy of stack
-                if (endInvokePlace != null) {
+                /*if (endInvokePlace != null) {
                     createArc(endInvokePlace, this.endTransition, this.mainPage);
-                }
+                }*/
             } catch (Exception e) {
                 System.err.println("Error traversing run() method for " + runMethod.getSignature());
                 e.printStackTrace();
