@@ -42,12 +42,20 @@ public class BytecodeParser {
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
-        //RetroLambda.run(mypath);
+        RetroLambda.run(mypath);
         SootClass mainClass;
 
         setupSoot(path);
 
         mainClass = Scene.v().getMainClass();
+
+        for(SootClass f : Scene.v().getApplicationClasses())
+        {
+            for(SootMethod m : f.getMethods())
+            {
+                m.retrieveActiveBody();
+            }
+        }
 
         //PackManager.v().writeOutput();
         mainClass.getMethods();
@@ -65,6 +73,10 @@ public class BytecodeParser {
         G.v().reset();
         Options.v().set_whole_program(true);
         Options.v().setPhaseOption("cg.spark", "on");
+        Options.v().setPhaseOption("cg.spark","enabled:true");
+        Options.v().setPhaseOption("cg.spark","geom-pta:true");
+        Options.v().setPhaseOption("cg.spark","simplify-offline:false");
+        Options.v().setPhaseOption("cg.spark","geom-runs:1");
         Options.v().setPhaseOption("cg", "all-reachable:true");
         Options.v().set_output_format(Options.output_format_none);
         Options.v().set_no_bodies_for_excluded(true);
@@ -81,7 +93,7 @@ public class BytecodeParser {
 
         Options.v().set_include(includeList);*/
         Options.v().setPhaseOption("jb", "use-original-names:true");
-        Options.v().setPhaseOption("jb.sils", "enabled:false");
+        //Options.v().setPhaseOption("jb.sils", "enabled:false");
 
         Options.v().set_soot_classpath(sootClassPath);
         Options.v().set_prepend_classpath(true);
