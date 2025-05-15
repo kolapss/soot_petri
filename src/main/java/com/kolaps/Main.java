@@ -8,6 +8,7 @@ import fr.lip6.move.pnml.framework.utils.exception.*;
 import fr.lip6.move.pnml.ptnet.hlapi.PetriNetDocHLAPI;
 
 import java.io.File;
+import java.io.FileNotFoundException;
 import java.io.IOException;
 
 public class Main {
@@ -57,6 +58,11 @@ public class Main {
             builder.exportToPnml();
         } catch (OtherException | ValidationFailedException | BadFileFormatException | IOException |
                  OCLValidationFailed | UnhandledNetType e) {
+            throw new RuntimeException(e);
+        }
+        try {
+            PTExtension.modifyPnml();
+        } catch (FileNotFoundException e) {
             throw new RuntimeException(e);
         }
     }
