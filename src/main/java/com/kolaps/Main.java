@@ -1,7 +1,13 @@
 package com.kolaps;
 
+import fr.lip6.move.pnml.framework.general.PNType;
+import fr.lip6.move.pnml.framework.hlapi.HLAPIRootClass;
+import fr.lip6.move.pnml.framework.utils.ModelRepository;
+import fr.lip6.move.pnml.framework.utils.PNMLUtils;
 import fr.lip6.move.pnml.framework.utils.exception.*;
+import fr.lip6.move.pnml.ptnet.hlapi.PetriNetDocHLAPI;
 
+import java.io.File;
 import java.io.IOException;
 
 public class Main {
@@ -21,7 +27,7 @@ public class Main {
     }*/
     public static void main(String[] args) {
 
-
+        //PetriNetDocHLAPI pt = importPNML();
         String jarFilePath = null;
         String jdkPath = System.getProperty("java.home");
         System.out.println("JDK path: " + jdkPath);
@@ -53,5 +59,38 @@ public class Main {
                  OCLValidationFailed | UnhandledNetType e) {
             throw new RuntimeException(e);
         }
+    }
+
+    private static PetriNetDocHLAPI importPNML()
+    {
+        File pnmlFile = new File("D:\\Programs\\portable\\tina-3.8.5\\bin\\buffer.pnml");
+        fr.lip6.move.pnml.ptnet.hlapi.PetriNetDocHLAPI ptDoc=null;
+
+        try {
+            // Импорт документа PNML без fallback
+            HLAPIRootClass root = PNMLUtils.importPnmlDocument(pnmlFile, false);
+
+            // Получение ID рабочей области документа
+            String wsId = ModelRepository.getInstance().getCurrentDocWSId();
+            System.out.println("Imported document workspace ID: " + wsId);
+
+            // Определение типа сети
+            PNType type = PNMLUtils.determinePNType(root);
+            System.out.println("Detected Petri Net Type: " + type);
+
+            // Пример обработки P/T сети
+
+            if (type == PNType.PTNET) {
+                ptDoc = (fr.lip6.move.pnml.ptnet.hlapi.PetriNetDocHLAPI) root;
+                System.out.println("Successfully imported a Place/Transition Net.");
+                // Здесь можно обработать сеть далее (места, переходы и т.д.)
+            } else {
+                System.out.println("This example only handles PTNET documents.");
+            }
+
+        } catch (ImportException | InvalidIDException e) {
+            e.printStackTrace();
+        }
+        return ptDoc;
     }
 }

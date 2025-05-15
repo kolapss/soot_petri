@@ -8,30 +8,18 @@ import boomerang.scene.jimple.JimpleVal;
 import boomerang.util.AccessPath;
 import com.kolaps.analyses.AliasingAnalysis;
 import com.kolaps.analyses.BoomAnalysis;
-import com.kolaps.analyses.SparseAliasManager;
 import fr.lip6.move.pnml.framework.general.PnmlExport;
 import fr.lip6.move.pnml.framework.utils.ModelRepository;
 import fr.lip6.move.pnml.framework.utils.exception.*;
 import fr.lip6.move.pnml.ptnet.hlapi.*;
 import javafx.util.Pair;
-import polyglot.ast.If;
 import soot.*;
-import soot.dava.toolkits.base.finders.IfFinder;
 import soot.jimple.*;
 import soot.jimple.internal.*;
-import soot.jimple.spark.geom.dataMgr.Obj_full_extractor;
-import soot.jimple.spark.geom.dataMgr.PtSensVisitor;
-import soot.jimple.spark.geom.geomE.GeometricManager;
 import soot.jimple.spark.geom.geomPA.GeomPointsTo;
 import soot.jimple.spark.geom.geomPA.GeomQueries;
-import soot.jimple.spark.geom.geomPA.GeomQueries.*;
-import soot.jimple.spark.geom.helper.GeomEvaluator;
-import soot.jimple.spark.pag.Node;
-import soot.jimple.spark.sets.P2SetVisitor;
-import soot.jimple.spark.sets.PointsToSetInternal;
 import soot.jimple.toolkits.annotation.logic.Loop;
 import soot.toolkits.graph.BriefUnitGraph;
-import soot.toolkits.graph.ExceptionalUnitGraph;
 import soot.toolkits.graph.LoopNestTree;
 import soot.toolkits.graph.UnitGraph;
 
@@ -543,7 +531,7 @@ public class PetriNetBuilder {
             } else if ((signature.equals("<java.lang.Object: void notify()>") ||
                     signature.equals("<java.lang.Object: void notifyAll()>"))
                     && invokeExpr instanceof InstanceInvokeExpr) {
-                processObjectNotify(stmt, (InstanceInvokeExpr) invokeExpr, currentPlace, graph, worklist, visitedUnits, currentMethod);
+                processObjectNotify(stmt, (InstanceInvokeExpr) invokeExpr, currentPlace, afterPlace, graph, worklist, visitedUnits, currentMethod, endPlaceMethod);
             }
 
             // --- Handle Regular Method Call ---
@@ -567,7 +555,36 @@ public class PetriNetBuilder {
         }
     }
 
-    private void processObjectNotify(InvokeStmt stmt, InstanceInvokeExpr invokeExpr, PlaceHLAPI currentPlace, UnitGraph graph, Queue<Pair<Unit, PlaceHLAPI>> worklist, Set<Unit> visitedUnits, SootMethod currentMethod) {
+    private void processObjectNotify(Unit unit, InstanceInvokeExpr invokeExpr, PlaceHLAPI currentPlace, PlaceHLAPI afterPlace, UnitGraph graph, Queue<Pair<Unit, PlaceHLAPI>> worklist, Set<Unit> visitedUnits, SootMethod method, MyPlace endPlaceMethod) {
+
+        InvokeStmt stmt = (InvokeStmt) unit;
+        Value monitor = invokeExpr.getBase();
+        LockPlaces.PlaceTriple triple = getOrCreateLockPlace(monitor, stmt, method, LockPlaces.PlaceType.WAIT);
+        PlaceHLAPI waitPlace = triple.getWait();
+        PlaceHLAPI lockPlace = triple.getLock();
+        PlaceHLAPI notifyPlace = triple.getNotify();
+        String monitorId = monitor.toString();
+
+
+        // --- Wait Transition ---
+        TransitionHLAPI notifyTransitionLeft = createTransition("notifyEntry_" + monitorId, mainPage);
+        TransitionHLAPI notifyTransitionRight = createTransition("notifyEntry_" + monitorId, mainPage);
+
+        PlaceHLAPI endNotifyPlace = createPlace("endNotify_" + monitorId, this.mainPage);
+        createArc(currentPlace,notifyTransitionRight,this.mainPage);
+        createArc(currentPlace,notifyTransitionLeft,this.mainPage);
+        createArc(notifyTransitionRight,endNotifyPlace,this.mainPage);
+        createArc(notifyTransitionLeft,endNotifyPlace,this.mainPage);
+        createArc(notifyTransitionLeft, notifyPlace,this.mainPage);
+        createArc(waitPlace, notifyTransitionLeft,this.mainPage);
+        //add inhibitor arc
+        ArcHLAPI inhib =  createArc(waitPlace,notifyTransitionRight,this.mainPage);
+        PTExtension.addInhibitorArc(inhib.getId());
+        endPlaceMethod.setPlace(endNotifyPlace);
+
+        // Add successor AFTER wait to the worklist (originating from placeAfterWait)
+        handleSuccessors(unit, endNotifyPlace, afterPlace, graph, worklist, visitedUnits, method, endPlaceMethod, true);
+
     }
 
     private void processObjectWait(Unit unit, InstanceInvokeExpr invokeExpr, PlaceHLAPI currentPlace, PlaceHLAPI afterPlace, UnitGraph graph, Queue<Pair<Unit, PlaceHLAPI>> worklist, Set<Unit> visitedUnits, SootMethod method, MyPlace endPlaceMethod) {
@@ -609,8 +626,6 @@ public class PetriNetBuilder {
         // Add successor AFTER wait to the worklist (originating from placeAfterWait)
         handleSuccessors(unit, placeAfterWait, afterPlace, graph, worklist, visitedUnits, method, endPlaceMethod, true);
 
-        // IMPORTANT: The wait() call itself stops this control path here.
-        // The continuation is handled by the re-acquire path.
     }
 
 

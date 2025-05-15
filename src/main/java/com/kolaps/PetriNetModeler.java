@@ -2,7 +2,15 @@ package com.kolaps;
 
 import fr.lip6.move.pnml.framework.utils.exception.InvalidIDException;
 import fr.lip6.move.pnml.framework.utils.exception.VoidRepositoryException;
+import fr.lip6.move.pnml.hlpn.hlcorestructure.HlcorestructureFactory;
+import fr.lip6.move.pnml.hlpn.hlcorestructure.PnObject;
+import fr.lip6.move.pnml.hlpn.hlcorestructure.ToolInfo;
+import fr.lip6.move.pnml.ptnet.Arc;
+import fr.lip6.move.pnml.ptnet.hlapi.ToolInfoHLAPI;
 import fr.lip6.move.pnml.ptnet.hlapi.*;
+import org.eclipse.emf.common.util.TreeIterator;
+import org.eclipse.emf.ecore.EObject;
+import org.eclipse.emf.ecore.EStructuralFeature;
 
 public class PetriNetModeler {
 
