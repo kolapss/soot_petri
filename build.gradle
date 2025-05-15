@@ -7,6 +7,8 @@ version = '1.0-SNAPSHOT'
 
 repositories {
     mavenCentral()
+    maven { url 'https://artifacts.camunda.com/artifactory/public' }
+
 }
 
 dependencies {
@@ -20,6 +22,10 @@ dependencies {
     implementation 'fr.lip6.pnml:fr.lip6.pnml.framework.ptnet:2.2.12'
     implementation 'fr.lip6.pnml:fr.lip6.pnml.framework.utils:2.2.12'
     implementation 'fr.lip6.pnml:fr.lip6.pnml.framework.hlpn:2.2.12'
+    implementation 'fr.lip6.pnml:framework.releng:2.2.12'
+    implementation 'org.apache.ws.commons.axiom:axiom-api:1.2.14'
+    implementation 'org.apache.ws.commons.axiom:axiom-impl:1.2.14'
+    implementation 'org.apache.ws.commons.axiom:axiom-dom:1.2.14'
 
 
     implementation 'org.openjfx:javafx-base:11.0.2:win'
@@ -32,8 +38,7 @@ dependencies {
     implementation(fileTree('libs') { include '*.jar' })
 
     //additiononal
-    implementation 'org.eclipse.emf:org.eclipse.emf.ecore:2.10.2-v20150123-0348'
-    implementation 'org.eclipse.emf:org.eclipse.emf.common:2.10.1'
+
     implementation 'com.thaiopensource:jing:20091111'
 }
 
