@@ -33,6 +33,10 @@ public class LockPlaces {
 
         private Local var;
 
+        public String getVarName() {
+            return varName;
+        }
+
         private final String varName; // Store varName to use it for creation
 
         // Constructor for PlaceTriple, takes the varName

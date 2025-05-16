@@ -8,6 +8,7 @@ import boomerang.scene.jimple.JimpleVal;
 import boomerang.util.AccessPath;
 import com.kolaps.analyses.AliasingAnalysis;
 import com.kolaps.analyses.BoomAnalysis;
+import com.kolaps.analyses.SparkAnalysis;
 import fr.lip6.move.pnml.framework.general.PnmlExport;
 import fr.lip6.move.pnml.framework.utils.ModelRepository;
 import fr.lip6.move.pnml.framework.utils.exception.*;
@@ -347,13 +348,11 @@ public class PetriNetBuilder {
 
         }
         List<ArcHLAPI> outArcs = entrySwitchPlace.getOutArcsHLAPI();
-        if(outArcs.isEmpty())
-        {
+        if (outArcs.isEmpty()) {
             mainPage.removeObjectsHLAPI(entrySwitchPlace);
             mainPage.removeObjectsHLAPI(endSwitchPlace);
             handleSuccessors(endSwitchUnit, currentPlace, afterPlace, graph, worklist, visitedUnits, method, endPlaceMethod, true);
-        }
-        else{
+        } else {
             TransitionHLAPI t = createTransition("beforeSwitch_", mainPage);
             createArc(currentPlace, t, mainPage);
             createArc(t, entrySwitchPlace, mainPage);
@@ -903,54 +902,6 @@ public class PetriNetBuilder {
         return uStr.substring(0, Math.min(uStr.length(), 100)) + lineStr; // Limit length
     }
 
-    /**
-     * Connects the given transition's output to the entry places of the successor
-     * units.
-     * Adds successors to the worklist if they haven't been visited yet.
-     * Use this after creating a transition for a unit (like EnterMonitor, Default,
-     * etc.).
-     *
-     * @param unit             The current unit whose successors are being
-     *                         processed.
-     * @param sourceTransition The transition representing the execution of 'unit'.
-     * @param graph            The UnitGraph.
-     * @param worklist         The worklist.
-     * @param visitedUnits     Set of visited units in this method activation.
-     * @param method           The current method.
-     */
-    private void handleSuccessors(Unit unit, TransitionHLAPI sourceTransition, UnitGraph graph,
-                                  Queue<Pair<Unit, PlaceHLAPI>> worklist, Set<Unit> visitedUnits, SootMethod method, MyPlace endPlaceMethod) {
-        List<Unit> successors = graph.getSuccsOf(unit);
-        if (successors.isEmpty()
-                && !(unit instanceof ReturnStmt || unit instanceof ReturnVoidStmt || unit instanceof ThrowStmt)) {
-            // Handle falling off the end of a method (implicit return void)
-            if (method.getReturnType() instanceof VoidType) {
-                System.out.println("      Unit falls off end of void method, adding implicit return.");
-                // Create implicit return transition connected from sourceTransition's output
-                // place
-                PlaceHLAPI placeAfterUnit = getOrCreateUnitExitPlace(unit, method); // We need the place *after* the
-                // unit
-                createArc(sourceTransition, placeAfterUnit, this.mainPage); // Connect unit transition to its exit place
-                processReturn((Stmt) unit, placeAfterUnit, endPlaceMethod); // Process return starting from that exit place
-            } else {
-                System.err.println("Warning: Non-void method path may fall off end without return: " + formatUnit(unit)
-                        + " in " + method.getName());
-                // Connect to a generic error/end state?
-                PlaceHLAPI falloffEndPlace = createPlace("falloff_end_" + method.getName(), this.mainPage);
-                createArc(sourceTransition, falloffEndPlace, this.mainPage);
-            }
-        } else {
-            for (Unit successor : successors) {
-                if (!(successor instanceof JIdentityStmt)) {
-                    PlaceHLAPI placeBeforeSuccessor = getOrCreatePlaceBeforeUnit(successor, method);
-                    createArc(sourceTransition, placeBeforeSuccessor, this.mainPage); // Arc from unit's transition to
-                    // the place *before* the
-                    // successor
-                    addUnitToWorklist(successor, placeBeforeSuccessor, worklist, visitedUnits);
-                }
-            }
-        }
-    }
 
     /**
      * Connects the output of a *place* (representing a state) to the entry places
@@ -1046,12 +997,6 @@ public class PetriNetBuilder {
         }
     }
 
-    private PlaceHLAPI getOrCreatePlaceBeforeUnit(Unit unit, SootMethod method) {
-        Pair<SootMethod, Unit> key = new Pair<>(method, unit);
-        // Use the same map but maybe adjust naming convention or use a separate map if
-        // clearer
-        return unitExitPlaces.computeIfAbsent(key, k -> createPlace("before_" + method.getName(), this.mainPage));
-    }
 
     private LockPlaces.PlaceTriple getOrCreateLockPlace(Value lockRef, Unit monitorStmtUnit, SootMethod contextMethod, LockPlaces.PlaceType placeType) {
         // --- КРИТИЧЕСКИЙ МОМЕНТ: Идентификация монитора ---
@@ -1065,6 +1010,8 @@ public class PetriNetBuilder {
         String strAllocValue = null;
         try {
             Pair<Set<AccessPath>, Map<ForwardQuery, AbstractBoomerangResults.Context>> ali = BoomAnalysis.runAnalysis(contextMethod, lockRef.toString(), monitorStmtUnit);
+            //PointerAnalysis.getAllocSite(monitorStmtUnit,contextMethod);
+            //Map<ForwardQuery, AbstractBoomerangResults.Context> alt = PointerAnalysis.allocSites;
             //Pair<Set<AccessPath>, Map<ForwardQuery, AbstractBoomerangResults.Context>> ali = analyzer.runAnalyses(lockRef.toString(), contextMethod.getDeclaringClass().getName(), contextMethod.getName());
             Map<ForwardQuery, AbstractBoomerangResults.Context> res = ali.getValue();
             if (!res.isEmpty()) {
@@ -1091,15 +1038,15 @@ public class PetriNetBuilder {
                 strAllocValue = lockRef.toString() + " (" + contextMethod.getDeclaringClass().getName() + "." + contextMethod.getSignature() + ")";
                 Map<String, LockPlaces.PlaceTriple> places = lockPlaces.getPlaces();
 
-                PointsToAnalysis pa = Scene.v().getPointsToAnalysis();
+                /*PointsToAnalysis pa = Scene.v().getPointsToAnalysis();
                 GeomPointsTo geomPTA = (GeomPointsTo) pa;
-                GeomQueries queryTester = new GeomQueries(geomPTA);
+                GeomQueries queryTester = new GeomQueries(geomPTA);*/
                 if (!places.isEmpty()) {
                     for (Map.Entry<String, LockPlaces.PlaceTriple> entry : places.entrySet()) {
                         String key = entry.getKey();
                         LockPlaces.PlaceTriple value = entry.getValue();
-                        if (queryTester.isAlias((Local) lockRef, value.getVar())) {
-                            System.out.println("Alias: " + key + " -> " + value.getVar());
+                        if (SparkAnalysis.isAlias((Local) lockRef, value.getVar())) {
+                            return lockPlaces.getPlace(value.getVarName());
                         }
                     }
                 }
@@ -1223,7 +1170,12 @@ public class PetriNetBuilder {
                         Unit lamU = searchLambdaInvoke(allocSites, lambdaVar);
 
                         JAssignStmt assign = (JAssignStmt) lamU;
-                        SootClass runClass = ((JNewExpr) assign.getRightOp()).getBaseType().getSootClass();
+                        SootClass runClass=null;
+                        if (assign.getRightOp() instanceof JNewExpr) {
+                            runClass = ((JNewExpr) assign.getRightOp()).getBaseType().getSootClass();
+                        } else if(assign.getRightOp() instanceof JStaticInvokeExpr) {
+                            runClass = ((JStaticInvokeExpr) assign.getRightOp()).getMethodRef().getDeclaringClass();
+                        }
                         runMethod = runClass.getMethod("void run()");
                     }
                 }
