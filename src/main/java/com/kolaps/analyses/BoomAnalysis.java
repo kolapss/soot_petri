@@ -30,7 +30,7 @@ public class BoomAnalysis {
     public static Boomerang boomerangSolver;
     private static Pair<Set<AccessPath>, Map<ForwardQuery, AbstractBoomerangResults.Context>> pp;
 
-    static class BoomerangOptions extends DefaultBoomerangOptions {
+    public static class BoomerangOptions extends DefaultBoomerangOptions {
 
         private SparseCFGCache.SparsificationStrategy sparsificationStrategy;
         private boolean ignoreAfterQuery;
@@ -66,7 +66,8 @@ public class BoomAnalysis {
 
         @Override
         public StaticFieldStrategy getStaticFieldStrategy() {
-            return StaticFieldStrategy.FLOW_SENSITIVE;
+
+            return StaticFieldStrategy.SINGLETON;
         }
 
         @Override
@@ -86,6 +87,7 @@ public class BoomAnalysis {
 
         @Override
         public boolean trackStaticFieldAtEntryPointToClinit() {
+
             return true;
         }
     }

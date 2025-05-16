@@ -1,4 +1,6 @@
 package com.kolaps;
+import boomerang.scene.sparse.SparseCFGCache;
+import com.kolaps.analyses.BoomAnalysis.BoomerangOptions;
 
 import boomerang.*;
 import boomerang.results.AbstractBoomerangResults;
@@ -9,6 +11,7 @@ import boomerang.scene.jimple.IntAndStringBoomerangOptions;
 import boomerang.scene.jimple.JimpleStatement;
 import boomerang.scene.jimple.SootCallGraph;
 import boomerang.util.AccessPath;
+import com.kolaps.analyses.BoomAnalysis;
 import soot.*;
 import soot.jimple.internal.JEnterMonitorStmt;
 import soot.jimple.internal.JExitMonitorStmt;
@@ -86,7 +89,7 @@ public class PointerAnalysis {
 
 
                 // 1. Create a Boomerang solver.
-                Boomerang solver = new Boomerang(sootCallGraph, SootDataFlowScope.make(Scene.v()), new MyBoomerangOptions());
+                Boomerang solver = new Boomerang(sootCallGraph, SootDataFlowScope.make(Scene.v()), new BoomerangOptions(SparseCFGCache.SparsificationStrategy.NONE,true));
 
                 // 2. Submit a query to the solver.
                 Collection<boomerang.Query> seeds = scope.computeSeeds();
