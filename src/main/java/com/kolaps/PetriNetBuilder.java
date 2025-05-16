@@ -243,7 +243,7 @@ public class PetriNetBuilder {
             } else if (currentUnit instanceof JGotoStmt) {
                 processGoto((JGotoStmt) currentUnit, currentUnitEntryPlace, graph, worklist, visitedUnits, method);
             } else if (currentUnit instanceof LookupSwitchStmt || currentUnit instanceof TableSwitchStmt) {
-                processSwitch((SwitchStmt) currentUnit, currentUnitEntryPlace, graph, worklist, visitedUnits, method);
+                processSwitch((SwitchStmt) currentUnit, currentUnitEntryPlace, afterPlace, graph, worklist, visitedUnits, method, endPlaceMethod, visitedOnPath);
             } else if (currentUnit instanceof ReturnStmt || currentUnit instanceof ReturnVoidStmt) {
                 processReturn((Stmt) currentUnit, currentUnitEntryPlace, endPlaceMethod); // No successors added from here
             } else if (currentUnit instanceof ThrowStmt) {
@@ -315,8 +315,51 @@ public class PetriNetBuilder {
         // add to worklist from here.
     }
 
-    private void processSwitch(SwitchStmt currentUnit, PlaceHLAPI currentUnitEntryPlace, UnitGraph graph,
-                               Queue<Pair<Unit, PlaceHLAPI>> worklist, Set<Unit> visitedUnits, SootMethod method) {
+    private void processSwitch(SwitchStmt stmt, PlaceHLAPI currentPlace, PlaceHLAPI afterPlace, UnitGraph graph, Queue<Pair<Unit, PlaceHLAPI>> worklist, Set<Unit> visitedUnits, SootMethod method, MyPlace endPlaceMethod, Set<SootMethod> visitedOnPath) {
+
+        JTableSwitchStmt table = (JTableSwitchStmt) stmt;
+        Unit cUnit = table.getTarget(0);
+        Unit endSwitchUnit = null;
+        Iterator<Unit> it = graph.iterator();
+        while (true) {
+            cUnit = it.next();
+            if (cUnit instanceof JGotoStmt) {
+                break;
+            }
+        }
+        endSwitchUnit = cUnit;
+        List<UnitBox> targetBoxes = table.getTargetBoxes();
+        //targetBoxes.add(table.getDefaultTargetBox());
+        PlaceHLAPI entrySwitchPlace = createPlace(escapeXml("entrySwitch_"), mainPage);
+        PlaceHLAPI endSwitchPlace = createPlace("endSwitch_", mainPage);
+        for (UnitBox box : targetBoxes) {
+            Unit entryUnit = box.getUnit();
+            Queue<Pair<Unit, PlaceHLAPI>> ifWorklist = new ArrayDeque<>();
+            Pair<Unit, PlaceHLAPI> key = new Pair<>(entryUnit, entrySwitchPlace);
+            ifWorklist.add(key);
+            PlaceHLAPI endBrunchPlace = processBrunch(method, entrySwitchPlace, visitedOnPath, afterPlace, ifWorklist, endSwitchUnit);
+            if (endBrunchPlace != null) {
+                TransitionHLAPI endSwitchTransition = createTransition("endSwitch_" + endBrunchPlace.getId(), mainPage);
+                createArc(endBrunchPlace, endSwitchTransition, mainPage);
+                createArc(endSwitchTransition, endSwitchPlace, mainPage);
+                endPlaceMethod.setPlace(endSwitchPlace);
+            }
+
+        }
+        List<ArcHLAPI> outArcs = entrySwitchPlace.getOutArcsHLAPI();
+        if(outArcs.isEmpty())
+        {
+            mainPage.removeObjectsHLAPI(entrySwitchPlace);
+            mainPage.removeObjectsHLAPI(endSwitchPlace);
+            handleSuccessors(endSwitchUnit, currentPlace, afterPlace, graph, worklist, visitedUnits, method, endPlaceMethod, true);
+        }
+        else{
+            TransitionHLAPI t = createTransition("beforeSwitch_", mainPage);
+            createArc(currentPlace, t, mainPage);
+            createArc(t, entrySwitchPlace, mainPage);
+            handleSuccessors(endSwitchUnit, endSwitchPlace, afterPlace, graph, worklist, visitedUnits, method, endPlaceMethod, true);
+        }
+        System.out.println("g");
     }
 
     private PlaceHLAPI processBrunch(SootMethod method, PlaceHLAPI entryPlace, Set<SootMethod> visitedOnPath,
@@ -345,8 +388,9 @@ public class PetriNetBuilder {
             }
 
             // --- Handle different statement types ---
-            if (currentUnit.equals(gotounit)) {
+            if (currentUnit.toString().equals(gotounit.toString())) {
                 worklist.clear();
+                break;
             } else if (currentUnit instanceof EnterMonitorStmt) {
                 processEnterMonitor((EnterMonitorStmt) currentUnit, currentUnitEntryPlace, afterPlace, graph, worklist,
                         visitedUnits, method, endPlaceMethod);
@@ -361,7 +405,7 @@ public class PetriNetBuilder {
             } else if (currentUnit instanceof JGotoStmt) {
                 processGoto((JGotoStmt) currentUnit, currentUnitEntryPlace, graph, worklist, visitedUnits, method);
             } else if (currentUnit instanceof LookupSwitchStmt || currentUnit instanceof TableSwitchStmt) {
-                processSwitch((SwitchStmt) currentUnit, currentUnitEntryPlace, graph, worklist, visitedUnits, method);
+                processSwitch((SwitchStmt) currentUnit, currentUnitEntryPlace, afterPlace, graph, worklist, visitedUnits, method, endPlaceMethod, visitedOnPath);
             } else if (currentUnit instanceof ThrowStmt) {
                 processThrow((ThrowStmt) currentUnit, currentUnitEntryPlace, graph, worklist, visitedUnits, method);
             }
@@ -571,14 +615,14 @@ public class PetriNetBuilder {
         TransitionHLAPI notifyTransitionRight = createTransition("notifyEntry_" + monitorId, mainPage);
 
         PlaceHLAPI endNotifyPlace = createPlace("endNotify_" + monitorId, this.mainPage);
-        createArc(currentPlace,notifyTransitionRight,this.mainPage);
-        createArc(currentPlace,notifyTransitionLeft,this.mainPage);
-        createArc(notifyTransitionRight,endNotifyPlace,this.mainPage);
-        createArc(notifyTransitionLeft,endNotifyPlace,this.mainPage);
-        createArc(notifyTransitionLeft, notifyPlace,this.mainPage);
-        createArc(waitPlace, notifyTransitionLeft,this.mainPage);
+        createArc(currentPlace, notifyTransitionRight, this.mainPage);
+        createArc(currentPlace, notifyTransitionLeft, this.mainPage);
+        createArc(notifyTransitionRight, endNotifyPlace, this.mainPage);
+        createArc(notifyTransitionLeft, endNotifyPlace, this.mainPage);
+        createArc(notifyTransitionLeft, notifyPlace, this.mainPage);
+        createArc(waitPlace, notifyTransitionLeft, this.mainPage);
         //add inhibitor arc
-        ArcHLAPI inhib =  createArc(waitPlace,notifyTransitionRight,this.mainPage);
+        ArcHLAPI inhib = createArc(waitPlace, notifyTransitionRight, this.mainPage);
         PTExtension.addInhibitorArc(inhib.getId());
         endPlaceMethod.setPlace(endNotifyPlace);
 
