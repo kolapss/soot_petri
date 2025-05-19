@@ -1,6 +1,7 @@
 package com.kolaps.utils;
 
 import com.kolaps.BytecodeParser;
+import com.kolaps.Options;
 
 import java.io.*;
 import java.nio.file.*;
@@ -182,7 +183,7 @@ public class RetroLambda {
         }
 
         String outFile = System.getProperty("user.dir") + "\\app.jar";
-        BytecodeParser.setPath(outFile);
+        Options.INSTANCE.setOption("app.jar",outFile);
 
         try {
             createJar(outputDir, outFile);

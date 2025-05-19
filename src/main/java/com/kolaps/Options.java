@@ -141,7 +141,9 @@ public enum Options {
     private void loadDefaultOptions() {
         // Пример настроек по умолчанию
         options.put("app.debug", "true");
-        options.put("tina_dir", System.getProperty("user.dir")+"\\tina");
+        options.put("tina_dir", System.getProperty("user.dir")+"\\tina\\");
+        options.put("app.jar", "");
+        options.put("app.pnml_file", "");
 
         // В реальном приложении здесь, скорее всего, вы бы загружали эти настройки
         // из файла (например, .properties, XML, JSON) или базы данных.

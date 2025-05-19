@@ -20,7 +20,7 @@ public class PTExtension {
     private static ArrayList<String> inhibitorArcs = new ArrayList<>();
 
     public static void modifyPnml() throws FileNotFoundException {
-        String filePath = System.getenv("fpath") + "/exporttest.pnml";
+        String filePath = Options.INSTANCE.getStringOption("app.pnml_file","");
         //String targetId = inhibitorArcs.get(0); // <-- укажи нужный id arc
 
         String namespace = "http://www.pnml.org/version-2009/grammar/pnml";
@@ -69,7 +69,7 @@ public class PTExtension {
         }
 
         // Сохранение изменений
-        try (FileOutputStream fos = new FileOutputStream("example_modified.pnml")) {
+        try (FileOutputStream fos = new FileOutputStream("example.pnml")) {
             root.serialize(fos);
         } catch (IOException | XMLStreamException e) {
             throw new RuntimeException(e);

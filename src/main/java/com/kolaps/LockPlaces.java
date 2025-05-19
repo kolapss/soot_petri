@@ -3,6 +3,7 @@ package com.kolaps;
 import fr.lip6.move.pnml.ptnet.hlapi.PTMarkingHLAPI;
 import fr.lip6.move.pnml.ptnet.hlapi.PlaceHLAPI;
 import soot.Local;
+import soot.SootMethod;
 import soot.Unit;
 
 import java.util.HashMap;
@@ -46,25 +47,25 @@ public class LockPlaces {
             // lock, wait, notify are implicitly null here
         }
 
-        public synchronized PlaceHLAPI getLock(Unit unit) {
+        public synchronized PlaceHLAPI getLock(Unit unit, SootMethod method) {
             if (lock == null) {
                 // Call the outer class's method to create the place
                 // LockPlaces.this syntax is used to refer to the outer class instance
-                lock = LockPlaces.this.createPlaceForType(varName, PlaceType.LOCK,unit);
+                lock = LockPlaces.this.createPlaceForType(varName, PlaceType.LOCK,unit, method);
             }
             return lock;
         }
 
-        public synchronized PlaceHLAPI getWait(Unit unit) {
+        public synchronized PlaceHLAPI getWait(Unit unit, SootMethod method) {
             if (wait == null) {
-                wait = LockPlaces.this.createPlaceForType(varName, PlaceType.WAIT,unit);
+                wait = LockPlaces.this.createPlaceForType(varName, PlaceType.WAIT,unit, method);
             }
             return wait;
         }
 
-        public synchronized PlaceHLAPI getNotify(Unit unit) {
+        public synchronized PlaceHLAPI getNotify(Unit unit, SootMethod method) {
             if (notify == null) {
-                notify = LockPlaces.this.createPlaceForType(varName, PlaceType.NOTIFY,unit);
+                notify = LockPlaces.this.createPlaceForType(varName, PlaceType.NOTIFY,unit, method);
             }
             return notify;
         }
@@ -85,11 +86,11 @@ public class LockPlaces {
     }
 
 
-    private PlaceHLAPI createPlaceForType(String varName, PlaceType type, Unit unit) {
+    private PlaceHLAPI createPlaceForType(String varName, PlaceType type, Unit unit, SootMethod method) {
         System.out.println("Creating new " + type + " Place for identifier: " + varName);
         String placeName = type.name() + "_" + varName;
         placeName = escapeXml(placeName);
-        PlaceHLAPI place = createPlace(placeName, PetriNetBuilder.getMainPage(),null);
+        PlaceHLAPI place = createPlace(placeName, PetriNetBuilder.getMainPage(),unit, method);
         if(type == PlaceType.LOCK) {
             new PTMarkingHLAPI(Long.valueOf(1),place);
         }
