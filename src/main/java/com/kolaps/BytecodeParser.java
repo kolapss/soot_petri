@@ -2,15 +2,14 @@ package com.kolaps;
 
 import com.kolaps.analyses.BoomAnalysis;
 import com.kolaps.utils.RetroLambda;
-import soot.*;
+import soot.G;
+import soot.Scene;
+import soot.SootClass;
+import soot.SootMethod;
 import soot.options.Options;
-import soot.toolkits.graph.BriefUnitGraph;
-import soot.toolkits.graph.ExceptionalUnitGraph;
-import soot.toolkits.graph.TrapUnitGraph;
-import soot.toolkits.graph.UnitGraph;
 
 import java.io.IOException;
-import java.util.*;
+import java.util.Collections;
 import java.util.jar.Attributes;
 import java.util.jar.JarFile;
 import java.util.jar.Manifest;
@@ -92,7 +91,7 @@ public class BytecodeParser {
 
         Options.v().set_include(includeList);*/
         Options.v().setPhaseOption("jb", "use-original-names:true");
-        //Options.v().setPhaseOption("jb.sils", "enabled:false");
+        Options.v().setPhaseOption("jb.sils", "enabled:false");
 
         Options.v().set_soot_classpath(sootClassPath);
         Options.v().set_prepend_classpath(true);
