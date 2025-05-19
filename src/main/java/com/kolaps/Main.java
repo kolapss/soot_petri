@@ -54,6 +54,7 @@ public class Main {
             throw new RuntimeException(e);
         }
         BytecodeParser.parseProgram(jarFilePath, builder);
+        Options.INSTANCE.setOption("app.pnml_file", System.getenv("fpath") + "\\exporttest.pnml");
         try {
             builder.exportToPnml();
         } catch (OtherException | ValidationFailedException | BadFileFormatException | IOException |
@@ -65,6 +66,8 @@ public class Main {
         } catch (FileNotFoundException e) {
             throw new RuntimeException(e);
         }
+        DeadlockDetector detector = new DeadlockDetector();
+        detector.run();
     }
 
     private static PetriNetDocHLAPI importPNML()

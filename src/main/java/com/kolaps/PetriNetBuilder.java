@@ -68,7 +68,6 @@ public class PetriNetBuilder {
     private int monitorCounter;
     private String packageName;
     private TransitionHLAPI endTransition;
-    private AliasingAnalysis analyzer = new AliasingAnalysis();
 
     PetriNetBuilder() throws InvalidIDException, VoidRepositoryException, OtherException, ValidationFailedException,
             BadFileFormatException, IOException, OCLValidationFailed, UnhandledNetType {
@@ -117,9 +116,9 @@ public class PetriNetBuilder {
         mainPage = createPage("main_thread", rootPetriNet);
 
         // Создаем начальное место для main
-        PlaceHLAPI startMainPlace = createPlace(escapeXml(mainMethod.getSignature()), mainPage, mainMethod.retrieveActiveBody().getUnits().getFirst());
+        PlaceHLAPI startMainPlace = createPlace(escapeXml(mainMethod.getSignature()), mainPage, mainMethod.retrieveActiveBody().getUnits().getFirst(), mainMethod);
         endTransition = createTransition("end_transition", this.mainPage);
-        PlaceHLAPI endPlace = createPlace("END", mainPage, mainMethod.retrieveActiveBody().getUnits().getLast());
+        PlaceHLAPI endPlace = createPlace("END", mainPage, mainMethod.retrieveActiveBody().getUnits().getLast(), mainMethod);
         // Устанавливаем начальную маркировку для точки входа
         new PTMarkingHLAPI(Long.valueOf(1), startMainPlace);
         System.out.println("Setting initial marking 1 for Start Place: " + startMainPlace.getId());
@@ -134,7 +133,7 @@ public class PetriNetBuilder {
             return null; // Indicate failure
         }
         //createArc(mainPlaceEnd, this.endTransition, this.mainPage);
-        createArc(this.endTransition, endPlace, this.mainPage);
+        createArc(this.endTransition, endPlace, mainPage);
 
         // Return the constructed net
         // Option 1: HLAPI
@@ -142,16 +141,16 @@ public class PetriNetBuilder {
     }
 
     private void connectToReturn(PlaceHLAPI sourcePlace, String reason, SootMethod method) {
-        TransitionHLAPI skipTransition = createTransition(reason + "_" + sourcePlace.getId().hashCode(), this.mainPage);
-        createArc(sourcePlace, skipTransition, this.mainPage);
+        TransitionHLAPI skipTransition = createTransition(reason + "_" + sourcePlace.getId().hashCode(), mainPage);
+        createArc(sourcePlace, skipTransition, mainPage);
         if (!returnPlaceStack.isEmpty()) {
             PlaceHLAPI callerReturnPlace = returnPlaceStack.peek();
-            createArc(skipTransition, callerReturnPlace, this.mainPage);
+            createArc(skipTransition, callerReturnPlace, mainPage);
             System.out.println("      Connecting skip transition " + skipTransition.getId() + " to caller return place "
                     + callerReturnPlace.getId());
         } else {
-            PlaceHLAPI endPlace = createPlace("end_" + reason, this.mainPage,method.retrieveActiveBody().getUnits().getLast());
-            createArc(skipTransition, endPlace, this.mainPage);
+            PlaceHLAPI endPlace = createPlace("end_" + reason, mainPage,method.retrieveActiveBody().getUnits().getLast(), method);
+            createArc(skipTransition, endPlace, mainPage);
             System.out.println(
                     "      Connecting skip transition " + skipTransition.getId() + " to end place " + endPlace.getId());
         }
@@ -248,8 +247,6 @@ public class PetriNetBuilder {
                 processSwitch((SwitchStmt) currentUnit, currentUnitEntryPlace, afterPlace, graph, worklist, visitedUnits, method, endPlaceMethod, visitedOnPath);
             } else if (currentUnit instanceof ReturnStmt || currentUnit instanceof ReturnVoidStmt) {
                 processReturn((Stmt) currentUnit, currentUnitEntryPlace, endPlaceMethod); // No successors added from here
-            } else if (currentUnit instanceof ThrowStmt) {
-                processThrow((ThrowStmt) currentUnit, currentUnitEntryPlace, graph, worklist, visitedUnits, method);
             }
             // Add more handlers if needed (e.g., AssignStmt if tracking specific values
             // matters)
@@ -282,10 +279,6 @@ public class PetriNetBuilder {
             System.out.println("      Added to worklist: [" + currentPlace.getId() + "] -> ");
             // Goto has no fall-through, only the target.
         }
-    }
-
-    private void processThrow(ThrowStmt currentUnit, PlaceHLAPI currentUnitEntryPlace, UnitGraph graph,
-                              Queue<Pair<Unit, PlaceHLAPI>> worklist, Set<Unit> visitedUnits, SootMethod method) {
     }
 
     private void processReturn(Stmt stmt, PlaceHLAPI currentPlace, MyPlace endPlaceMethod) {
@@ -332,8 +325,8 @@ public class PetriNetBuilder {
         endSwitchUnit = cUnit;
         List<UnitBox> targetBoxes = table.getTargetBoxes();
         //targetBoxes.add(table.getDefaultTargetBox());
-        PlaceHLAPI entrySwitchPlace = createPlace(escapeXml("entrySwitch_"), mainPage, stmt);
-        PlaceHLAPI endSwitchPlace = createPlace("endSwitch_", mainPage, stmt);
+        PlaceHLAPI entrySwitchPlace = createPlace(escapeXml("entrySwitch_"), mainPage, stmt, method);
+        PlaceHLAPI endSwitchPlace = createPlace("endSwitch_", mainPage, stmt, method);
         for (UnitBox box : targetBoxes) {
             Unit entryUnit = box.getUnit();
             Queue<Pair<Unit, PlaceHLAPI>> ifWorklist = new ArrayDeque<>();
@@ -406,8 +399,6 @@ public class PetriNetBuilder {
                 processGoto((JGotoStmt) currentUnit, currentUnitEntryPlace, graph, worklist, visitedUnits, method);
             } else if (currentUnit instanceof LookupSwitchStmt || currentUnit instanceof TableSwitchStmt) {
                 processSwitch((SwitchStmt) currentUnit, currentUnitEntryPlace, afterPlace, graph, worklist, visitedUnits, method, endPlaceMethod, visitedOnPath);
-            } else if (currentUnit instanceof ThrowStmt) {
-                processThrow((ThrowStmt) currentUnit, currentUnitEntryPlace, graph, worklist, visitedUnits, method);
             }
             // Add more handlers if needed (e.g., AssignStmt if tracking specific values
             // matters)
@@ -454,7 +445,7 @@ public class PetriNetBuilder {
             }
             trueList.add(cUnit);
         }
-        PlaceHLAPI entryIfPlace = createPlace(escapeXml("entry_" + stmt.toString()), this.mainPage, stmt);
+        PlaceHLAPI entryIfPlace = createPlace(escapeXml("entry_" + stmt.toString()), mainPage, stmt, method);
         Queue<Pair<Unit, PlaceHLAPI>> ifWorklist = new ArrayDeque<>();
         Loop selectedCycle = null;
         for (Loop f : loopNestTree) {
@@ -489,29 +480,29 @@ public class PetriNetBuilder {
             PlaceHLAPI endIfTruePlace = processBrunch(method, entryIfPlace, visitedOnPath, afterPlace, ifWorklist, endTrueBrunch);
             PlaceHLAPI endIfPlace;
             if (endIfTruePlace != null) {
-                TransitionHLAPI brunchStartTransition = createTransition("startIf_" + entryIfPlace.getId(), this.mainPage);
-                createArc(currentPlace, brunchStartTransition, this.mainPage);
-                createArc(brunchStartTransition, entryIfPlace, this.mainPage);
-                TransitionHLAPI endIfTransition = createTransition("endTrueIf_" + endIfTruePlace.getId(), this.mainPage);
-                createArc(endIfTruePlace, endIfTransition, this.mainPage);
-                endIfPlace = createPlace("endIf_" + entryIfPlace.getId(), this.mainPage, stmt);
-                createArc(endIfTransition, endIfPlace, this.mainPage);
+                TransitionHLAPI brunchStartTransition = createTransition("startIf_" + entryIfPlace.getId(), mainPage);
+                createArc(currentPlace, brunchStartTransition, mainPage);
+                createArc(brunchStartTransition, entryIfPlace, mainPage);
+                TransitionHLAPI endIfTransition = createTransition("endTrueIf_" + endIfTruePlace.getId(), mainPage);
+                createArc(endIfTruePlace, endIfTransition, mainPage);
+                endIfPlace = createPlace("endIf_" + entryIfPlace.getId(), mainPage, stmt, method);
+                createArc(endIfTransition, endIfPlace, mainPage);
                 if (falseList.isEmpty()) { //Если нет блока else, то просто соединяем entryIfPlace c endIfPlace
-                    TransitionHLAPI elseTransition = createTransition("else_" + entryIfPlace.getId(), this.mainPage);
-                    createArc(currentPlace, elseTransition, this.mainPage);
-                    createArc(elseTransition, endIfPlace, this.mainPage);
+                    TransitionHLAPI elseTransition = createTransition("else_" + entryIfPlace.getId(), mainPage);
+                    createArc(currentPlace, elseTransition, mainPage);
+                    createArc(elseTransition, endIfPlace, mainPage);
                     endPlaceMethod.setPlace(endIfPlace);
                     handleSuccessors(endTrueBrunch, endIfPlace, afterPlace, graph, worklist, visitedUnits, method, endPlaceMethod, true);
                 } else { //Обрабатываем ветку else
                     endIfFalsePlace = processBrunch(method, entryIfPlace, visitedOnPath, afterPlace, ifWorklist, endTrueBrunch);
                     if (endIfFalsePlace != null) {
-                        TransitionHLAPI endFalseTransition = createTransition("endFalse_" + entryIfPlace.getId(), this.mainPage);
-                        createArc(endIfFalsePlace, endFalseTransition, this.mainPage);
-                        createArc(endFalseTransition, endIfPlace, this.mainPage);
+                        TransitionHLAPI endFalseTransition = createTransition("endFalse_" + entryIfPlace.getId(), mainPage);
+                        createArc(endIfFalsePlace, endFalseTransition, mainPage);
+                        createArc(endFalseTransition, endIfPlace, mainPage);
                     } else {
-                        TransitionHLAPI elseTransition = createTransition("else_" + entryIfPlace.getId(), this.mainPage);
-                        createArc(currentPlace, elseTransition, this.mainPage);
-                        createArc(elseTransition, endIfPlace, this.mainPage);
+                        TransitionHLAPI elseTransition = createTransition("else_" + entryIfPlace.getId(), mainPage);
+                        createArc(currentPlace, elseTransition, mainPage);
+                        createArc(elseTransition, endIfPlace, mainPage);
                     }
                     endPlaceMethod.setPlace(endIfPlace);
                     handleSuccessors(endTrueBrunch, endIfPlace, afterPlace, graph, worklist, visitedUnits, method, endPlaceMethod, true);
@@ -545,7 +536,7 @@ public class PetriNetBuilder {
     private PlaceHLAPI getOrCreateUnitEntryPlace(Unit unit, SootMethod method) {
 
         Pair<SootMethod, Unit> key = new Pair<>(method, unit); // Reuse Pair for consistency
-        return unitExitPlaces.computeIfAbsent(key, k -> createPlace("entry_" + method.getName() + "_ln" + unit.getJavaSourceStartLineNumber() + "_" + unit.hashCode(), this.mainPage, unit));
+        return unitExitPlaces.computeIfAbsent(key, k -> createPlace("entry_" + method.getName() + "_ln" + unit.getJavaSourceStartLineNumber() + "_" + unit.hashCode(), this.mainPage, unit, method));
 
     }
 
@@ -605,9 +596,9 @@ public class PetriNetBuilder {
         Value monitor = invokeExpr.getBase();
         LockPlaces.PlaceTriple triple = getOrCreateLockPlace(monitor, stmt, method, LockPlaces.PlaceType.WAIT);
         Unit allocUnit = getVariableUnit(strAllocValue);
-        PlaceHLAPI waitPlace = triple.getWait(allocUnit);
-        PlaceHLAPI lockPlace = triple.getLock(allocUnit);
-        PlaceHLAPI notifyPlace = triple.getNotify(allocUnit);
+        PlaceHLAPI waitPlace = triple.getWait(allocUnit, method);
+        PlaceHLAPI lockPlace = triple.getLock(allocUnit, method);
+        PlaceHLAPI notifyPlace = triple.getNotify(allocUnit, method);
         String monitorId = monitor.toString();
 
 
@@ -615,15 +606,15 @@ public class PetriNetBuilder {
         TransitionHLAPI notifyTransitionLeft = createTransition("notifyEntry_" + monitorId, mainPage);
         TransitionHLAPI notifyTransitionRight = createTransition("notifyEntry_" + monitorId, mainPage);
 
-        PlaceHLAPI endNotifyPlace = createPlace("endNotify_" + monitorId, this.mainPage, unit);
-        createArc(currentPlace, notifyTransitionRight, this.mainPage);
-        createArc(currentPlace, notifyTransitionLeft, this.mainPage);
-        createArc(notifyTransitionRight, endNotifyPlace, this.mainPage);
-        createArc(notifyTransitionLeft, endNotifyPlace, this.mainPage);
-        createArc(notifyTransitionLeft, notifyPlace, this.mainPage);
-        createArc(waitPlace, notifyTransitionLeft, this.mainPage);
+        PlaceHLAPI endNotifyPlace = createPlace("endNotify_" + monitorId, mainPage, unit, method);
+        createArc(currentPlace, notifyTransitionRight, mainPage);
+        createArc(currentPlace, notifyTransitionLeft, mainPage);
+        createArc(notifyTransitionRight, endNotifyPlace, mainPage);
+        createArc(notifyTransitionLeft, endNotifyPlace, mainPage);
+        createArc(notifyTransitionLeft, notifyPlace, mainPage);
+        createArc(waitPlace, notifyTransitionLeft, mainPage);
         //add inhibitor arc
-        ArcHLAPI inhib = createArc(waitPlace, notifyTransitionRight, this.mainPage);
+        ArcHLAPI inhib = createArc(waitPlace, notifyTransitionRight, mainPage);
         PTExtension.addInhibitorArc(inhib.getId());
         endPlaceMethod.setPlace(endNotifyPlace);
 
@@ -632,14 +623,15 @@ public class PetriNetBuilder {
 
     }
 
-    private void processObjectWait(Unit unit, InstanceInvokeExpr invokeExpr, PlaceHLAPI currentPlace, PlaceHLAPI afterPlace, UnitGraph graph, Queue<Pair<Unit, PlaceHLAPI>> worklist, Set<Unit> visitedUnits, SootMethod method, MyPlace endPlaceMethod) {
+    private void processObjectWait(Unit unit, InstanceInvokeExpr invokeExpr, PlaceHLAPI currentPlace, PlaceHLAPI afterPlace, UnitGraph graph,
+                                   Queue<Pair<Unit, PlaceHLAPI>> worklist, Set<Unit> visitedUnits, SootMethod method, MyPlace endPlaceMethod) {
         InvokeStmt stmt = (InvokeStmt) unit;
         Value monitor = invokeExpr.getBase();
         LockPlaces.PlaceTriple triple = getOrCreateLockPlace(monitor, stmt, method, LockPlaces.PlaceType.WAIT);
         Unit allocUnit = getVariableUnit(strAllocValue);
-        PlaceHLAPI waitPlace = triple.getWait(allocUnit);
-        PlaceHLAPI lockPlace = triple.getLock(allocUnit);
-        PlaceHLAPI notifyPlace = triple.getNotify(allocUnit);
+        PlaceHLAPI waitPlace = triple.getWait(allocUnit, method);
+        PlaceHLAPI lockPlace = triple.getLock(allocUnit, method);
+        PlaceHLAPI notifyPlace = triple.getNotify(allocUnit, method);
         String monitorId = monitor.toString();
 
 
@@ -649,7 +641,7 @@ public class PetriNetBuilder {
         createArc(waitTransition, lockPlace, mainPage);
         createArc(waitTransition, waitPlace, mainPage);
 
-        PlaceHLAPI afterWaitPlace = createPlace("afterWait_" + monitorId, mainPage, unit);
+        PlaceHLAPI afterWaitPlace = createPlace("afterWait_" + monitorId, mainPage, unit, method);
         createArc(waitTransition, afterWaitPlace, mainPage);
 
 
@@ -660,12 +652,12 @@ public class PetriNetBuilder {
         createArc(afterWaitPlace, notifyTransition, mainPage);
         createArc(notifyPlace, notifyTransition, mainPage);
 
-        PlaceHLAPI afterNotifyPlace = createPlace("afterNotify_" + monitorId, mainPage, unit);
+        PlaceHLAPI afterNotifyPlace = createPlace("afterNotify_" + monitorId, mainPage, unit, method);
         createArc(notifyTransition, afterNotifyPlace, mainPage);
         TransitionHLAPI endWaitTransition = createTransition("endWait_" + monitorId, mainPage);
         createArc(afterNotifyPlace, endWaitTransition, mainPage);
         createArc(lockPlace, endWaitTransition, mainPage);
-        PlaceHLAPI placeAfterWait = createPlace("endWait_" + monitorId, mainPage, unit);
+        PlaceHLAPI placeAfterWait = createPlace("endWait_" + monitorId, mainPage, unit, method);
         createArc(endWaitTransition, placeAfterWait, mainPage);
         endPlaceMethod.setPlace(placeAfterWait);
 
@@ -768,13 +760,13 @@ public class PetriNetBuilder {
         Value threadObject = invokeExpr.getBase(); // The thread object being started
         String threadId = getMonitorId(threadObject); // Use monitor ID logic for thread obj ID
 
-        TransitionHLAPI startTransition = createTransition(escapeXml(invokeExpr.toString()), this.mainPage);
-        createArc(currentPlace, startTransition, this.mainPage);
+        TransitionHLAPI startTransition = createTransition(escapeXml(invokeExpr.toString()), mainPage);
+        createArc(currentPlace, startTransition, mainPage);
 
         // 1. Continue current thread's execution path
         PlaceHLAPI placeAfterStart = getOrCreateUnitExitPlace(stmt, currentMethod);
         endPlaceMethod.setPlace(placeAfterStart);
-        createArc(startTransition, placeAfterStart, this.mainPage);
+        createArc(startTransition, placeAfterStart, mainPage);
         handleSuccessors(stmt, placeAfterStart, afterPlace, graph, worklist, visitedUnits, currentMethod, endPlaceMethod, true); // Continue
         // caller
         // thread
@@ -787,9 +779,9 @@ public class PetriNetBuilder {
 
         if (runMethod != null && runMethod.isConcrete()) {
             PlaceHLAPI runEntryPlace = methodEntryPlaces.computeIfAbsent(runMethod,
-                    m -> createPlace(escapeXml("entry_" + m.toString()), this.mainPage,unit));
+                    m -> createPlace(escapeXml("entry_" + m.toString()), mainPage,unit, currentMethod));
 
-            createArc(startTransition, runEntryPlace, this.mainPage); // Arc forks to the run method entry
+            createArc(startTransition, runEntryPlace, mainPage); // Arc forks to the run method entry
 
             System.out.println("      Forking new thread for: " + runMethod.getSignature() + " [Entry Place: "
                     + runEntryPlace.getId() + "]");
@@ -818,9 +810,6 @@ public class PetriNetBuilder {
         }
     }
 
-    private SootMethod findRunMethod(Value threadObject) {
-        return null;
-    }
 
     private void processExitMonitor(Unit unit, PlaceHLAPI currentPlace, PlaceHLAPI afterPlace, UnitGraph graph,
                                     Queue<Pair<Unit, PlaceHLAPI>> worklist, Set<Unit> visitedUnits, SootMethod method, MyPlace endPlaceMethod) {
@@ -828,15 +817,15 @@ public class PetriNetBuilder {
         Value monitor = stmt.getOp();
         LockPlaces.PlaceTriple triple = getOrCreateLockPlace(monitor, unit, method, LockPlaces.PlaceType.LOCK);
         Unit allocUnit = getVariableUnit(strAllocValue);
-        PlaceHLAPI lockPlace = triple.getLock(allocUnit);
+        PlaceHLAPI lockPlace = triple.getLock(allocUnit,method);
         String monitorId = getMonitorId(monitor);
 
         TransitionHLAPI exitTransition = createTransition(
-                "exit_" + escapeXml(monitor.toString() + "_" + method.toString()), this.mainPage);
-        createArc(currentPlace, exitTransition, this.mainPage); // Arc from current control flow place
-        createArc(exitTransition, lockPlace, this.mainPage); // Arc from lock resource place (needs token)
-        PlaceHLAPI afterLock = createPlace("after_" + lockPlace.getId(), this.mainPage, unit);
-        createArc(exitTransition, afterLock, this.mainPage);
+                "exit_" + escapeXml(monitor.toString() + "_" + method.toString()), mainPage);
+        createArc(currentPlace, exitTransition, mainPage); // Arc from current control flow place
+        createArc(exitTransition, lockPlace, mainPage); // Arc from lock resource place (needs token)
+        PlaceHLAPI afterLock = createPlace("after_" + lockPlace.getId(), mainPage, unit,method);
+        createArc(exitTransition, afterLock, mainPage);
         endPlaceMethod.setPlace(afterLock);
 
         System.out.println("    Added EnterMonitor: " + monitorId + " [" + exitTransition.getId() + "]");
@@ -930,15 +919,15 @@ public class PetriNetBuilder {
         LockPlaces.PlaceTriple triple = getOrCreateLockPlace(monitor, unit, method, LockPlaces.PlaceType.LOCK);
         Unit allocUnit = getVariableUnit(strAllocValue);
         triple.setVar((Local) monitor);
-        PlaceHLAPI lockPlace = triple.getLock(allocUnit);
+        PlaceHLAPI lockPlace = triple.getLock(allocUnit, method);
         String monitorId = getMonitorId(monitor);
 
         TransitionHLAPI enterTransition = createTransition(
-                "enter_" + escapeXml(monitor.toString() + "_" + method.toString()), this.mainPage);
-        createArc(currentPlace, enterTransition, this.mainPage); // Arc from current control flow place
-        createArc(lockPlace, enterTransition, this.mainPage); // Arc from lock resource place (needs token)
-        PlaceHLAPI afterLock = createPlace("after_" + lockPlace.getId(), this.mainPage, unit);
-        createArc(enterTransition, afterLock, this.mainPage);
+                "enter_" + escapeXml(monitor.toString() + "_" + method.toString()), mainPage);
+        createArc(currentPlace, enterTransition, mainPage); // Arc from current control flow place
+        createArc(lockPlace, enterTransition, mainPage); // Arc from lock resource place (needs token)
+        PlaceHLAPI afterLock = createPlace("after_" + lockPlace.getId(), mainPage, unit, method);
+        createArc(enterTransition, afterLock, mainPage);
         endPlaceMethod.setPlace(afterLock);
 
         System.out.println("    Added EnterMonitor: " + monitorId + " [" + enterTransition.getId() + "]");
@@ -961,10 +950,10 @@ public class PetriNetBuilder {
                         + currentPlace.getId() + " after " + formatUnit(unit));
                 // Need a transition from sourcePlace to end state
                 TransitionHLAPI falloffTransition = createTransition("falloff_" + currentPlace.getId().hashCode(),
-                        this.mainPage);
-                createArc(currentPlace, falloffTransition, this.mainPage);
-                PlaceHLAPI falloffEndPlace = createPlace("falloff_end_" + method.getName(), this.mainPage, unit);
-                createArc(falloffTransition, falloffEndPlace, this.mainPage);
+                        mainPage);
+                createArc(currentPlace, falloffTransition, mainPage);
+                PlaceHLAPI falloffEndPlace = createPlace("falloff_end_" + method.getName(), mainPage, unit, method);
+                createArc(falloffTransition, falloffEndPlace, mainPage);
             }
         } else {
             for (Unit successor : successors) {
@@ -1024,10 +1013,10 @@ public class PetriNetBuilder {
                         + sourcePlace.getId() + " after " + formatUnit(unit));
                 // Need a transition from sourcePlace to end state
                 TransitionHLAPI falloffTransition = createTransition("falloff_" + sourcePlace.getId().hashCode(),
-                        this.mainPage);
-                createArc(sourcePlace, falloffTransition, this.mainPage);
-                PlaceHLAPI falloffEndPlace = createPlace("falloff_end_" + method.getName(), this.mainPage, unit);
-                createArc(falloffTransition, falloffEndPlace, this.mainPage);
+                        mainPage);
+                createArc(sourcePlace, falloffTransition, mainPage);
+                PlaceHLAPI falloffEndPlace = createPlace("falloff_end_" + method.getName(), mainPage, unit, method);
+                createArc(falloffTransition, falloffEndPlace, mainPage);
             }
         } else {
             for (Unit successor : successors) {
@@ -1050,7 +1039,7 @@ public class PetriNetBuilder {
     private PlaceHLAPI getOrCreateUnitExitPlace(Unit unit, SootMethod method) {
         Pair<SootMethod, Unit> key = new Pair<>(method, unit);
         return unitExitPlaces.computeIfAbsent(key,
-                k -> createPlace("after_" + escapeXml(unit.toString()), this.mainPage, unit));
+                k -> createPlace("after_" + escapeXml(unit.toString()), mainPage, unit, method));
     }
 
     /**
@@ -1103,7 +1092,7 @@ public class PetriNetBuilder {
                 strAllocValue = firstKey.var().toString();
             } else {
 
-                Optional<Unit> unitOp =
+                /*Optional<Unit> unitOp =
                         contextMethod.getActiveBody().getUnits().stream()
                                 .filter(e -> e.toString().startsWith(lockRef.toString()))
                                 .findFirst();
@@ -1117,7 +1106,7 @@ public class PetriNetBuilder {
                         JIdentityStmt stmt = (JIdentityStmt) unit;
                         Value leftOp = stmt.getLeftOp();
                     }
-                }
+                }*/
                 strAllocValue = lockRef.toString() + " (" + contextMethod.getDeclaringClass().getName() + "." + contextMethod.getSignature() + ")";
                 Map<String, LockPlaces.PlaceTriple> places = lockPlaces.getPlaces();
 
@@ -1126,7 +1115,6 @@ public class PetriNetBuilder {
                 GeomQueries queryTester = new GeomQueries(geomPTA);*/
                 if (!places.isEmpty()) {
                     for (Map.Entry<String, LockPlaces.PlaceTriple> entry : places.entrySet()) {
-                        String key = entry.getKey();
                         LockPlaces.PlaceTriple value = entry.getValue();
                         if (SparkAnalysis.isAlias((Local) lockRef, value.getVar())) {
                             return lockPlaces.getPlace(value.getVarName());
@@ -1201,7 +1189,6 @@ public class PetriNetBuilder {
         for (ForwardQuery query : allocSites.keySet()) {
             JimpleVal locallValue = ((JimpleVal) ((AllocVal) query.var()).getDelegate());
             SootMethod alloccMethod = ((JimpleMethod) locallValue.m()).getDelegate();
-            String alloccVal = locallValue.getVariableName();
             UnitGraph alloccGraph = new BriefUnitGraph(alloccMethod.retrieveActiveBody());
             for (Unit lamU : alloccGraph) {
                 if (lamU.toString().startsWith(lambdaVar + " = ")) {
@@ -1224,7 +1211,6 @@ public class PetriNetBuilder {
         if (!startClass.toString().equals("java.lang.Thread")) {
             return startClass.getMethod("void run()");
         } else {
-            Set<AccessPath> aliases = ali.getKey();
             Map<ForwardQuery, AbstractBoomerangResults.Context> allocSites = ali.getValue();
             if (!allocSites.isEmpty()) {
                 Pair<Unit, UnitGraph> ser = searchThreadInit(allocSites);
@@ -1248,8 +1234,6 @@ public class PetriNetBuilder {
                 } else {
                     String lambdaVar = args.get(0).toString();
                     PointerAnalysis.getAllocThreadStart(invokeStmt, contextMethod);
-                    Map<ForwardQuery, AbstractBoomerangResults.Context> allocNew = PointerAnalysis.allocSites;
-                    ForwardQuery allocQuery = null;
                     if (!allocSites.isEmpty()) {
                         Unit lamU = searchLambdaInvoke(allocSites, lambdaVar);
 
@@ -1336,50 +1320,10 @@ public class PetriNetBuilder {
                 .replace("'", "&apos;");
     }
 
-    /*
-     * public void buildTestNet() throws InvalidIDException,
-     * VoidRepositoryException, OtherException, ValidationFailedException,
-     * BadFileFormatException, IOException, OCLValidationFailed, UnhandledNetType {
-     *
-     *
-     *
-     * PlaceHLAPI p1 = new PlaceHLAPI("place1");
-     * PlaceHLAPI p2 = new PlaceHLAPI("place2");
-     * PlaceHLAPI p3 = new PlaceHLAPI("place3");
-     * PlaceHLAPI p4 = new PlaceHLAPI("place4");
-     *
-     *
-     * TransitionHLAPI t1 = new TransitionHLAPI("transistion1");
-     * TransitionHLAPI t2 = new TransitionHLAPI("transistion2");
-     *
-     * new ArcHLAPI("a1", p1, t1, page);
-     * new ArcHLAPI("a2", p2, t1, page);
-     * new ArcHLAPI("a3", t1, p3, page);
-     * new ArcHLAPI("a4", p4, t2, page);
-     * new ArcHLAPI("a5", t2, p1, page);
-     *
-     *
-     * p1.setContainerPageHLAPI(page);
-     * p2.setContainerPageHLAPI(page);
-     * p3.setContainerPageHLAPI(page);
-     * t1.setContainerPageHLAPI(page);
-     * t2.setContainerPageHLAPI(page);
-     * p4.setContainerPageHLAPI(page);
-     *
-     * PTMarkingHLAPI ptMarking = new PTMarkingHLAPI(Long.valueOf(1),p4);
-     * //PTMarkingHLAPI pt1Marking = new PTMarkingHLAPI(Long.valueOf(1),p2);
-     *
-     *
-     *
-     * PnmlExport pex = new PnmlExport();
-     * pex.exportObject(doc, System.getenv("fpath") + "/exporttest.pnml");
-     *
-     * }
-     */
     public void exportToPnml() throws OtherException, ValidationFailedException, BadFileFormatException, IOException,
             OCLValidationFailed, UnhandledNetType {
         PnmlExport pex = new PnmlExport();
-        pex.exportObject(this.document, System.getenv("fpath") + "/exporttest.pnml");
+        pex.exportObject(this.document, Options.INSTANCE.getStringOption("app.pnml_file",""));
     }
 
 }

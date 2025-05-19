@@ -11,6 +11,7 @@ import fr.lip6.move.pnml.ptnet.hlapi.*;
 import org.eclipse.emf.common.util.TreeIterator;
 import org.eclipse.emf.ecore.EObject;
 import org.eclipse.emf.ecore.EStructuralFeature;
+import soot.SootMethod;
 import soot.Unit;
 
 import java.util.HashMap;
@@ -23,11 +24,11 @@ public class PetriNetModeler {
     private static int arcCounter = 0;
     private static boolean isDebug = false;
 
-    public static Map<Unit, PlaceHLAPI> getPtUnits() {
+    public static Map<PlaceHLAPI, UMPair> getPtUnits() {
         return PtUnits;
     }
 
-    private static Map<Unit, PlaceHLAPI> PtUnits = new HashMap<Unit, PlaceHLAPI>();
+    private static Map<PlaceHLAPI, UMPair> PtUnits = new HashMap<PlaceHLAPI, UMPair>();
 
     static {
         isDebug = Options.INSTANCE.getStringOption("app.debug", "false").equals("true");
@@ -86,14 +87,14 @@ public class PetriNetModeler {
         return transition;
     }
 
-    public static PlaceHLAPI createPlace(String baseName, PageHLAPI page, Unit unit) {
+    public static PlaceHLAPI createPlace(String baseName, PageHLAPI page, Unit unit, SootMethod method) {
         String id = "p" + placeCounter++;
         String name = baseName + "_" + id;
         NodeGraphicsHLAPI graphics = null; // Создать графику по необходимости
         PlaceHLAPI place = null;
         try {
             place = new PlaceHLAPI(name, page);
-            PtUnits.put(unit, place);
+            PtUnits.put(place, new UMPair(unit, method));
         } catch (InvalidIDException | VoidRepositoryException e) {
             throw new RuntimeException(e);
         }
@@ -105,18 +106,7 @@ public class PetriNetModeler {
     }
 
     public static void deletePlace(PlaceHLAPI place) {
-        Unit keyToRemove = null;
-        for (Map.Entry<Unit, PlaceHLAPI> entry : PtUnits.entrySet()) {
-            if (entry.getValue().equals(place)) {
-                keyToRemove = entry.getKey();
-                break;
-            }
-        }
-
-        // Удаляем, если нашли
-        if (keyToRemove != null) {
-            PtUnits.remove(keyToRemove);
-        }
+        PtUnits.remove(place);
         PetriNetBuilder.getMainPage().removeObjectsHLAPI(place);
     }
 

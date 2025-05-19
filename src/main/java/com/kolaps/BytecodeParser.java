@@ -17,7 +17,6 @@ import java.util.jar.Manifest;
 
 public class BytecodeParser {
 
-    public static String path = null;
     public static String mainClassName = null;
 
     public static String getMainClass(String jarFilePath) throws IOException {
@@ -32,20 +31,20 @@ public class BytecodeParser {
     }
 
     public static void setPath(String pathh) {
-        path = pathh;
+        com.kolaps.Options.INSTANCE.setOption("app.jar",pathh);
     }
 
     public static void parseProgram(String mypath, PetriNetBuilder builder) {
-        path = mypath;
+        com.kolaps.Options.INSTANCE.setOption("app.jar",mypath);
         try {
-            mainClassName = getMainClass(path);
+            mainClassName = getMainClass(com.kolaps.Options.INSTANCE.getStringOption("app.jar",""));
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
         RetroLambda.run(mypath);
         SootClass mainClass;
 
-        setupSoot(path);
+        setupSoot(com.kolaps.Options.INSTANCE.getStringOption("app.jar",""));
 
         mainClass = Scene.v().getMainClass();
 
@@ -97,7 +96,7 @@ public class BytecodeParser {
 
         Options.v().set_soot_classpath(sootClassPath);
         Options.v().set_prepend_classpath(true);
-        Options.v().set_process_dir(Collections.singletonList(path));
+        Options.v().set_process_dir(Collections.singletonList(com.kolaps.Options.INSTANCE.getStringOption("app.jar","")));
         // Options.v().set_main_class(this.getTargetClass());
         SootClass c = null;
         c = Scene.v().forceResolve(mainClassName, SootClass.BODIES);
