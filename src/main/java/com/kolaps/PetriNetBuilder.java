@@ -17,8 +17,6 @@ import javafx.util.Pair;
 import soot.*;
 import soot.jimple.*;
 import soot.jimple.internal.*;
-import soot.jimple.spark.geom.geomPA.GeomPointsTo;
-import soot.jimple.spark.geom.geomPA.GeomQueries;
 import soot.jimple.toolkits.annotation.logic.Loop;
 import soot.toolkits.graph.BriefUnitGraph;
 import soot.toolkits.graph.LoopNestTree;
@@ -26,6 +24,8 @@ import soot.toolkits.graph.UnitGraph;
 
 import java.io.IOException;
 import java.util.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import static com.kolaps.PetriNetModeler.*;
 
@@ -55,6 +55,7 @@ public class PetriNetBuilder {
     }
 
     private static PageHLAPI mainPage;
+    private static String strAllocValue;
     //private final Map<String, PlaceHLAPI> lockPlaces; // Ключ - Value из Soot (нужен хороший способ идентификации)
     private LockPlaces lockPlaces;
     private Map<Value, PlaceHLAPI> waitPlaces;
@@ -116,9 +117,9 @@ public class PetriNetBuilder {
         mainPage = createPage("main_thread", rootPetriNet);
 
         // Создаем начальное место для main
-        PlaceHLAPI startMainPlace = createPlace(escapeXml(mainMethod.getSignature()), mainPage);
+        PlaceHLAPI startMainPlace = createPlace(escapeXml(mainMethod.getSignature()), mainPage, mainMethod.retrieveActiveBody().getUnits().getFirst());
         endTransition = createTransition("end_transition", this.mainPage);
-        PlaceHLAPI endPlace = createPlace("END", mainPage);
+        PlaceHLAPI endPlace = createPlace("END", mainPage, mainMethod.retrieveActiveBody().getUnits().getLast());
         // Устанавливаем начальную маркировку для точки входа
         new PTMarkingHLAPI(Long.valueOf(1), startMainPlace);
         System.out.println("Setting initial marking 1 for Start Place: " + startMainPlace.getId());
@@ -140,7 +141,7 @@ public class PetriNetBuilder {
         return this.rootPetriNet;
     }
 
-    private void connectToReturn(PlaceHLAPI sourcePlace, String reason) {
+    private void connectToReturn(PlaceHLAPI sourcePlace, String reason, SootMethod method) {
         TransitionHLAPI skipTransition = createTransition(reason + "_" + sourcePlace.getId().hashCode(), this.mainPage);
         createArc(sourcePlace, skipTransition, this.mainPage);
         if (!returnPlaceStack.isEmpty()) {
@@ -149,7 +150,7 @@ public class PetriNetBuilder {
             System.out.println("      Connecting skip transition " + skipTransition.getId() + " to caller return place "
                     + callerReturnPlace.getId());
         } else {
-            PlaceHLAPI endPlace = createPlace("end_" + reason, this.mainPage);
+            PlaceHLAPI endPlace = createPlace("end_" + reason, this.mainPage,method.retrieveActiveBody().getUnits().getLast());
             createArc(skipTransition, endPlace, this.mainPage);
             System.out.println(
                     "      Connecting skip transition " + skipTransition.getId() + " to end place " + endPlace.getId());
@@ -161,13 +162,13 @@ public class PetriNetBuilder {
         // --- Base Cases and Checks ---
         if (!method.isConcrete()) {
             System.out.println("Skipping non-concrete method: " + method.getSignature());
-            connectToReturn(entryPlace, "skip_non_concrete"); // Connect entry to return flow
+            connectToReturn(entryPlace, "skip_non_concrete", method); // Connect entry to return flow
             return null;
         }
         // Optional: Skip library methods (can configure this)
         if (method.isJavaLibraryMethod() || method.isPhantom()) {
             System.out.println("Skipping library/phantom method: " + method.getSignature());
-            connectToReturn(entryPlace, "skip_library");
+            connectToReturn(entryPlace, "skip_library", method);
             return null;
         }
         if (visitedOnPath.contains(method)) {
@@ -177,7 +178,7 @@ public class PetriNetBuilder {
             // return?
             // Connecting to return might be safer to avoid infinite loops in analysis if
             // not handled well.
-            connectToReturn(entryPlace, "skip_recursion");
+            connectToReturn(entryPlace, "skip_recursion", method);
             return null;
         }
         if (!method.hasActiveBody()) {
@@ -185,13 +186,13 @@ public class PetriNetBuilder {
                 method.retrieveActiveBody(); // Try to get the body
                 if (!method.hasActiveBody()) {
                     System.out.println("Method has no active body, skipping: " + method.getSignature());
-                    connectToReturn(entryPlace, "skip_no_body");
+                    connectToReturn(entryPlace, "skip_no_body", method);
                     return null;
                 }
             } catch (Exception e) {
                 System.out.println(
                         "Could not retrieve body for " + method.getSignature() + ", skipping: " + e.getMessage());
-                connectToReturn(entryPlace, "skip_body_error");
+                connectToReturn(entryPlace, "skip_body_error", method);
                 return null;
             }
         }
@@ -331,8 +332,8 @@ public class PetriNetBuilder {
         endSwitchUnit = cUnit;
         List<UnitBox> targetBoxes = table.getTargetBoxes();
         //targetBoxes.add(table.getDefaultTargetBox());
-        PlaceHLAPI entrySwitchPlace = createPlace(escapeXml("entrySwitch_"), mainPage);
-        PlaceHLAPI endSwitchPlace = createPlace("endSwitch_", mainPage);
+        PlaceHLAPI entrySwitchPlace = createPlace(escapeXml("entrySwitch_"), mainPage, stmt);
+        PlaceHLAPI endSwitchPlace = createPlace("endSwitch_", mainPage, stmt);
         for (UnitBox box : targetBoxes) {
             Unit entryUnit = box.getUnit();
             Queue<Pair<Unit, PlaceHLAPI>> ifWorklist = new ArrayDeque<>();
@@ -453,7 +454,7 @@ public class PetriNetBuilder {
             }
             trueList.add(cUnit);
         }
-        PlaceHLAPI entryIfPlace = createPlace(escapeXml("entry_" + stmt.toString()), this.mainPage);
+        PlaceHLAPI entryIfPlace = createPlace(escapeXml("entry_" + stmt.toString()), this.mainPage, stmt);
         Queue<Pair<Unit, PlaceHLAPI>> ifWorklist = new ArrayDeque<>();
         Loop selectedCycle = null;
         for (Loop f : loopNestTree) {
@@ -493,7 +494,7 @@ public class PetriNetBuilder {
                 createArc(brunchStartTransition, entryIfPlace, this.mainPage);
                 TransitionHLAPI endIfTransition = createTransition("endTrueIf_" + endIfTruePlace.getId(), this.mainPage);
                 createArc(endIfTruePlace, endIfTransition, this.mainPage);
-                endIfPlace = createPlace("endIf_" + entryIfPlace.getId(), this.mainPage);
+                endIfPlace = createPlace("endIf_" + entryIfPlace.getId(), this.mainPage, stmt);
                 createArc(endIfTransition, endIfPlace, this.mainPage);
                 if (falseList.isEmpty()) { //Если нет блока else, то просто соединяем entryIfPlace c endIfPlace
                     TransitionHLAPI elseTransition = createTransition("else_" + entryIfPlace.getId(), this.mainPage);
@@ -544,7 +545,7 @@ public class PetriNetBuilder {
     private PlaceHLAPI getOrCreateUnitEntryPlace(Unit unit, SootMethod method) {
 
         Pair<SootMethod, Unit> key = new Pair<>(method, unit); // Reuse Pair for consistency
-        return unitExitPlaces.computeIfAbsent(key, k -> createPlace("entry_" + method.getName() + "_ln" + unit.getJavaSourceStartLineNumber() + "_" + unit.hashCode(), this.mainPage));
+        return unitExitPlaces.computeIfAbsent(key, k -> createPlace("entry_" + method.getName() + "_ln" + unit.getJavaSourceStartLineNumber() + "_" + unit.hashCode(), this.mainPage, unit));
 
     }
 
@@ -603,9 +604,10 @@ public class PetriNetBuilder {
         InvokeStmt stmt = (InvokeStmt) unit;
         Value monitor = invokeExpr.getBase();
         LockPlaces.PlaceTriple triple = getOrCreateLockPlace(monitor, stmt, method, LockPlaces.PlaceType.WAIT);
-        PlaceHLAPI waitPlace = triple.getWait();
-        PlaceHLAPI lockPlace = triple.getLock();
-        PlaceHLAPI notifyPlace = triple.getNotify();
+        Unit allocUnit = getVariableUnit(strAllocValue);
+        PlaceHLAPI waitPlace = triple.getWait(allocUnit);
+        PlaceHLAPI lockPlace = triple.getLock(allocUnit);
+        PlaceHLAPI notifyPlace = triple.getNotify(allocUnit);
         String monitorId = monitor.toString();
 
 
@@ -613,7 +615,7 @@ public class PetriNetBuilder {
         TransitionHLAPI notifyTransitionLeft = createTransition("notifyEntry_" + monitorId, mainPage);
         TransitionHLAPI notifyTransitionRight = createTransition("notifyEntry_" + monitorId, mainPage);
 
-        PlaceHLAPI endNotifyPlace = createPlace("endNotify_" + monitorId, this.mainPage);
+        PlaceHLAPI endNotifyPlace = createPlace("endNotify_" + monitorId, this.mainPage, unit);
         createArc(currentPlace, notifyTransitionRight, this.mainPage);
         createArc(currentPlace, notifyTransitionLeft, this.mainPage);
         createArc(notifyTransitionRight, endNotifyPlace, this.mainPage);
@@ -634,9 +636,10 @@ public class PetriNetBuilder {
         InvokeStmt stmt = (InvokeStmt) unit;
         Value monitor = invokeExpr.getBase();
         LockPlaces.PlaceTriple triple = getOrCreateLockPlace(monitor, stmt, method, LockPlaces.PlaceType.WAIT);
-        PlaceHLAPI waitPlace = triple.getWait();
-        PlaceHLAPI lockPlace = triple.getLock();
-        PlaceHLAPI notifyPlace = triple.getNotify();
+        Unit allocUnit = getVariableUnit(strAllocValue);
+        PlaceHLAPI waitPlace = triple.getWait(allocUnit);
+        PlaceHLAPI lockPlace = triple.getLock(allocUnit);
+        PlaceHLAPI notifyPlace = triple.getNotify(allocUnit);
         String monitorId = monitor.toString();
 
 
@@ -646,7 +649,7 @@ public class PetriNetBuilder {
         createArc(waitTransition, lockPlace, mainPage);
         createArc(waitTransition, waitPlace, mainPage);
 
-        PlaceHLAPI afterWaitPlace = createPlace("afterWait_" + monitorId, mainPage);
+        PlaceHLAPI afterWaitPlace = createPlace("afterWait_" + monitorId, mainPage, unit);
         createArc(waitTransition, afterWaitPlace, mainPage);
 
 
@@ -657,12 +660,12 @@ public class PetriNetBuilder {
         createArc(afterWaitPlace, notifyTransition, mainPage);
         createArc(notifyPlace, notifyTransition, mainPage);
 
-        PlaceHLAPI afterNotifyPlace = createPlace("afterNotify_" + monitorId, mainPage);
+        PlaceHLAPI afterNotifyPlace = createPlace("afterNotify_" + monitorId, mainPage, unit);
         createArc(notifyTransition, afterNotifyPlace, mainPage);
         TransitionHLAPI endWaitTransition = createTransition("endWait_" + monitorId, mainPage);
         createArc(afterNotifyPlace, endWaitTransition, mainPage);
         createArc(lockPlace, endWaitTransition, mainPage);
-        PlaceHLAPI placeAfterWait = createPlace("endWait_" + monitorId, mainPage);
+        PlaceHLAPI placeAfterWait = createPlace("endWait_" + monitorId, mainPage, unit);
         createArc(endWaitTransition, placeAfterWait, mainPage);
         endPlaceMethod.setPlace(placeAfterWait);
 
@@ -784,7 +787,7 @@ public class PetriNetBuilder {
 
         if (runMethod != null && runMethod.isConcrete()) {
             PlaceHLAPI runEntryPlace = methodEntryPlaces.computeIfAbsent(runMethod,
-                    m -> createPlace(escapeXml("entry_" + m.toString()), this.mainPage));
+                    m -> createPlace(escapeXml("entry_" + m.toString()), this.mainPage,unit));
 
             createArc(startTransition, runEntryPlace, this.mainPage); // Arc forks to the run method entry
 
@@ -824,14 +827,15 @@ public class PetriNetBuilder {
         ExitMonitorStmt stmt = (ExitMonitorStmt) unit;
         Value monitor = stmt.getOp();
         LockPlaces.PlaceTriple triple = getOrCreateLockPlace(monitor, unit, method, LockPlaces.PlaceType.LOCK);
-        PlaceHLAPI lockPlace = triple.getLock();
+        Unit allocUnit = getVariableUnit(strAllocValue);
+        PlaceHLAPI lockPlace = triple.getLock(allocUnit);
         String monitorId = getMonitorId(monitor);
 
         TransitionHLAPI exitTransition = createTransition(
                 "exit_" + escapeXml(monitor.toString() + "_" + method.toString()), this.mainPage);
         createArc(currentPlace, exitTransition, this.mainPage); // Arc from current control flow place
         createArc(exitTransition, lockPlace, this.mainPage); // Arc from lock resource place (needs token)
-        PlaceHLAPI afterLock = createPlace("after_" + lockPlace.getId(), this.mainPage);
+        PlaceHLAPI afterLock = createPlace("after_" + lockPlace.getId(), this.mainPage, unit);
         createArc(exitTransition, afterLock, this.mainPage);
         endPlaceMethod.setPlace(afterLock);
 
@@ -841,20 +845,99 @@ public class PetriNetBuilder {
         handleSuccessors(stmt, afterLock, afterPlace, graph, worklist, visitedUnits, method, endPlaceMethod, true);
     }
 
+    public static Unit getVariableUnit(String inputStr) {
+        Pattern mainPattern = Pattern.compile("^(\\w+)\\s*\\((.+)\\)$");
+        Matcher mainMatcher = mainPattern.matcher(inputStr);
+        String variableName = null;
+        String methodFullInfo;
+        String sootMethodSignature = null;
+        if (mainMatcher.find()) {
+            variableName = mainMatcher.group(1);
+            methodFullInfo = mainMatcher.group(2);
+
+            Pattern sigPattern = Pattern.compile("(<.+>)");
+            Matcher sigMatcher = sigPattern.matcher(methodFullInfo);
+            if (sigMatcher.find()) {
+                sootMethodSignature = sigMatcher.group(1);
+                System.out.println(sootMethodSignature);
+
+            } else {
+                System.err.println("Не удалось извлечь Soot-совместимую сигнатуру из: " + methodFullInfo);
+            }
+        }
+
+        SootMethod sootMethod = null;
+        try {
+            sootMethod = Scene.v().getMethod(sootMethodSignature);
+        } catch (RuntimeException e) {
+            System.err.println("Ошибка: не удалось найти метод с сигнатурой '" + sootMethodSignature + "': " + e.getMessage());
+            //return Collections.emptyList();
+        }
+
+        if (!sootMethod.isConcrete()) {
+            System.err.println("Метод " + sootMethodSignature + " не является конкретным (может быть abstract или native).");
+            //return Collections.emptyList();
+        }
+
+        Body activeBody = null;
+        try {
+            activeBody = sootMethod.retrieveActiveBody();
+        } catch (RuntimeException e) {
+            System.err.println("Ошибка при получении тела метода " + sootMethodSignature + ": " + e.getMessage());
+            e.printStackTrace(); // Добавим стек вызовов для отладки
+            //return Collections.emptyList();
+        }
+
+        if (activeBody == null) {
+            System.err.println("Тело метода для " + sootMethodSignature + " не найдено (null).");
+            //return Collections.emptyList();
+        }
+
+
+        Unit assignmentUnits = null;
+
+        for (Unit unit : activeBody.getUnits()) {
+            // 1. Присваивания через AssignStmt (например, x = y;)
+            if (unit instanceof AssignStmt) {
+                AssignStmt assignStmt = (AssignStmt) unit;
+                Value leftOp = assignStmt.getLeftOp();
+                if (leftOp instanceof Local) {
+                    Local local = (Local) leftOp;
+                    if (local.getName().equals(variableName)) {
+                        return unit;
+                    }
+                }
+            }
+            // 2. Присваивания через IdentityStmt (например, x := @parameter0: type; или x := @this: type;)
+            else if (unit instanceof IdentityStmt) {
+                IdentityStmt idStmt = (IdentityStmt) unit;
+                Value leftOp = idStmt.getLeftOp();
+                if (leftOp instanceof Local) {
+                    Local local = (Local) leftOp;
+                    if (local.getName().equals(variableName)) {
+                        return unit;
+                    }
+                }
+            }
+        }
+        return null;
+    }
+
     private void processEnterMonitor(Unit unit, PlaceHLAPI currentPlace, PlaceHLAPI afterPlace, UnitGraph graph,
                                      Queue<Pair<Unit, PlaceHLAPI>> worklist, Set<Unit> visitedUnits, SootMethod method, MyPlace endPlaceMethod) {
         EnterMonitorStmt stmt = (EnterMonitorStmt) unit;
         Value monitor = stmt.getOp();
         LockPlaces.PlaceTriple triple = getOrCreateLockPlace(monitor, unit, method, LockPlaces.PlaceType.LOCK);
+        Unit allocUnit = getVariableUnit(strAllocValue);
         triple.setVar((Local) monitor);
-        PlaceHLAPI lockPlace = triple.getLock();
+        PlaceHLAPI lockPlace = triple.getLock(allocUnit);
         String monitorId = getMonitorId(monitor);
 
         TransitionHLAPI enterTransition = createTransition(
                 "enter_" + escapeXml(monitor.toString() + "_" + method.toString()), this.mainPage);
         createArc(currentPlace, enterTransition, this.mainPage); // Arc from current control flow place
         createArc(lockPlace, enterTransition, this.mainPage); // Arc from lock resource place (needs token)
-        PlaceHLAPI afterLock = createPlace("after_" + lockPlace.getId(), this.mainPage);
+        PlaceHLAPI afterLock = createPlace("after_" + lockPlace.getId(), this.mainPage, unit);
         createArc(enterTransition, afterLock, this.mainPage);
         endPlaceMethod.setPlace(afterLock);
 
@@ -880,7 +963,7 @@ public class PetriNetBuilder {
                 TransitionHLAPI falloffTransition = createTransition("falloff_" + currentPlace.getId().hashCode(),
                         this.mainPage);
                 createArc(currentPlace, falloffTransition, this.mainPage);
-                PlaceHLAPI falloffEndPlace = createPlace("falloff_end_" + method.getName(), this.mainPage);
+                PlaceHLAPI falloffEndPlace = createPlace("falloff_end_" + method.getName(), this.mainPage, unit);
                 createArc(falloffTransition, falloffEndPlace, this.mainPage);
             }
         } else {
@@ -943,7 +1026,7 @@ public class PetriNetBuilder {
                 TransitionHLAPI falloffTransition = createTransition("falloff_" + sourcePlace.getId().hashCode(),
                         this.mainPage);
                 createArc(sourcePlace, falloffTransition, this.mainPage);
-                PlaceHLAPI falloffEndPlace = createPlace("falloff_end_" + method.getName(), this.mainPage);
+                PlaceHLAPI falloffEndPlace = createPlace("falloff_end_" + method.getName(), this.mainPage, unit);
                 createArc(falloffTransition, falloffEndPlace, this.mainPage);
             }
         } else {
@@ -967,7 +1050,7 @@ public class PetriNetBuilder {
     private PlaceHLAPI getOrCreateUnitExitPlace(Unit unit, SootMethod method) {
         Pair<SootMethod, Unit> key = new Pair<>(method, unit);
         return unitExitPlaces.computeIfAbsent(key,
-                k -> createPlace("after_" + escapeXml(unit.toString()), this.mainPage));
+                k -> createPlace("after_" + escapeXml(unit.toString()), this.mainPage, unit));
     }
 
     /**
@@ -1007,7 +1090,7 @@ public class PetriNetBuilder {
         // Пока используем сам Value как ключ (может не работать правильно, если Value
         // не имеет стабильного equals/hashCode)
         // или его строковое представление. НУЖНА НАДЕЖНАЯ СТРАТЕГИЯ ИДЕНТИФИКАЦИИ!
-        String strAllocValue = null;
+        strAllocValue = null;
         try {
             Pair<Set<AccessPath>, Map<ForwardQuery, AbstractBoomerangResults.Context>> ali = BoomAnalysis.runAnalysis(contextMethod, lockRef.toString(), monitorStmtUnit);
             //PointerAnalysis.getAllocSite(monitorStmtUnit,contextMethod);
@@ -1059,6 +1142,7 @@ public class PetriNetBuilder {
         if (strAllocValue == null) {
             strAllocValue = lockRef.toString() + contextMethod.getSignature();
         }
+
         return lockPlaces.getPlace(strAllocValue);
         //String strAllocValue = PointerAnalysis.getAllocSite(monitorStmtUnit, contextMethod);
         /*return lockPlaces.computeIfAbsent(strAllocValue, key -> {

@@ -11,14 +11,35 @@ import fr.lip6.move.pnml.ptnet.hlapi.*;
 import org.eclipse.emf.common.util.TreeIterator;
 import org.eclipse.emf.ecore.EObject;
 import org.eclipse.emf.ecore.EStructuralFeature;
+import soot.Unit;
+
+import java.util.HashMap;
+import java.util.Map;
 
 public class PetriNetModeler {
 
     private static int transitionCounter = 0;
     private static int placeCounter = 0;
-    private  static int arcCounter = 0;
+    private static int arcCounter = 0;
+    private static boolean isDebug = false;
+
+    public static Map<Unit, PlaceHLAPI> getPtUnits() {
+        return PtUnits;
+    }
+
+    private static Map<Unit, PlaceHLAPI> PtUnits = new HashMap<Unit, PlaceHLAPI>();
+
+    static {
+        isDebug = Options.INSTANCE.getStringOption("app.debug", "false").equals("true");
+    }
+
     public static ArcHLAPI createArc(PlaceHLAPI source, TransitionHLAPI target, PageHLAPI page) {
-        String id = "arc_" + source.getId() + "_" + target.getId()+arcCounter++;
+        String id;
+        if (isDebug == true) {
+            id = "arc_" + source.getId() + "_" + target.getId() + arcCounter++;
+        } else {
+            id = "arc_" + arcCounter++;
+        }
         ArcHLAPI arc = null; // Вес дуги = 1.0 (обычно)
         try {
             arc = new ArcHLAPI(id, source, target, page);
@@ -31,7 +52,12 @@ public class PetriNetModeler {
     }
 
     public static ArcHLAPI createArc(TransitionHLAPI source, PlaceHLAPI target, PageHLAPI page) {
-        String id = "arc_" + source.getId() + "_" + target.getId();
+        String id;
+        if (isDebug == true) {
+            id = "arc_" + source.getId() + "_" + target.getId() + arcCounter++;
+        } else {
+            id = "arc_" + arcCounter++;
+        }
         ArcHLAPI arc = null;
         try {
             arc = new ArcHLAPI(id, source, target, page);
@@ -60,13 +86,14 @@ public class PetriNetModeler {
         return transition;
     }
 
-    public static PlaceHLAPI createPlace(String baseName, PageHLAPI page) {
+    public static PlaceHLAPI createPlace(String baseName, PageHLAPI page, Unit unit) {
         String id = "p" + placeCounter++;
         String name = baseName + "_" + id;
         NodeGraphicsHLAPI graphics = null; // Создать графику по необходимости
         PlaceHLAPI place = null;
         try {
             place = new PlaceHLAPI(name, page);
+            PtUnits.put(unit, place);
         } catch (InvalidIDException | VoidRepositoryException e) {
             throw new RuntimeException(e);
         }
@@ -75,6 +102,22 @@ public class PetriNetModeler {
         place.setContainerPageHLAPI(page);
         System.out.println("Created Place: " + name + " on Page " + page.getId());
         return place;
+    }
+
+    public static void deletePlace(PlaceHLAPI place) {
+        Unit keyToRemove = null;
+        for (Map.Entry<Unit, PlaceHLAPI> entry : PtUnits.entrySet()) {
+            if (entry.getValue().equals(place)) {
+                keyToRemove = entry.getKey();
+                break;
+            }
+        }
+
+        // Удаляем, если нашли
+        if (keyToRemove != null) {
+            PtUnits.remove(keyToRemove);
+        }
+        PetriNetBuilder.getMainPage().removeObjectsHLAPI(place);
     }
 
 }
