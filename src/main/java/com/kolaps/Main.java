@@ -63,7 +63,7 @@ public class Main {
         }
         try {
             PTExtension.modifyPnml();
-        } catch (FileNotFoundException e) {
+        } catch (IOException e) {
             throw new RuntimeException(e);
         }
         DeadlockDetector detector = new DeadlockDetector();

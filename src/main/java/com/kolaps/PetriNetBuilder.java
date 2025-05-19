@@ -835,7 +835,7 @@ public class PetriNetBuilder {
     }
 
     public static Unit getVariableUnit(String inputStr) {
-        Pattern mainPattern = Pattern.compile("^(\\w+)\\s*\\((.+)\\)$");
+        Pattern mainPattern = Pattern.compile("^([^ (]+)\\s*\\((.+)\\)$");
         Matcher mainMatcher = mainPattern.matcher(inputStr);
         String variableName = null;
         String methodFullInfo;
@@ -1254,62 +1254,6 @@ public class PetriNetBuilder {
         return runMethod;
     }
 
-
-    private SootMethod findRunMethodForStartCall(Unit invokeStmt, SootMethod contextMethod) {
-        // 1. Получить объект, на котором вызывается start():
-        // invokeStmt.getInvokeExpr().getUseBoxes() -> Value base
-        // 2. Определить тип этого объекта: base.getType() -> Type type
-        // 3. Если тип - RefType, получить SootClass: ((RefType) type).getSootClass()
-        // 4. Найти метод run() в этом классе или его суперклассах/интерфейсах:
-        // sootClass.getMethodUnsafe("run", Collections.emptyList(), VoidType.v())
-        // ИЛИ sootClass.getMethodByNameUnsafe("run") и проверить сигнатуру.
-        // 5. Это может потребовать анализа, какой именно Runnable передается в
-        // конструктор Thread, если start() вызывается на базовом Thread.
-        // Это сложная задача, требующая анализа потока данных или упрощений.
-        SootMethod runMethod = null;
-        SootClass startClass = ((JInvokeStmt) invokeStmt).getInvokeExpr().getMethodRef().getDeclaringClass();
-        if (!startClass.toString().equals("java.lang.Thread")) {
-            return startClass.getMethod("void run()");
-        } else {
-            Set<AccessPath> aliases = PointerAnalysis.getAllocThreadStart(invokeStmt, contextMethod);
-            Map<ForwardQuery, AbstractBoomerangResults.Context> allocSites = PointerAnalysis.allocSites;
-            if (!allocSites.isEmpty()) {
-                Pair<Unit, UnitGraph> ser = searchThreadInit(allocSites);
-                Unit u = ser.getKey();
-                UnitGraph allocGraph = ser.getValue();
-                List<Value> args = ((JInvokeStmt) u).getInvokeExpr().getArgs();
-                if (args.size() == 1) // Если лямбда
-                {
-                    String lambdaVar = args.get(0).toString();
-                    for (Unit lamU : allocGraph) {
-                        if (lamU.toString().startsWith(lambdaVar + " =") && lamU.toString().contains("lambda")
-                                && lamU.toString().contains("java.lang.Runnable")) {
-                            JAssignStmt assign = (JAssignStmt) lamU;
-                            SootClass lamClass = ((JStaticInvokeExpr) assign.getRightOpBox().getValue()).getMethodRef()
-                                    .getDeclaringClass();
-                            runMethod = lamClass.getMethod("void run()");
-                            System.out.println(assign);
-                        }
-                    }
-                } else {
-                    String lambdaVar = args.get(0).toString();
-                    PointerAnalysis.getAllocThreadStart(invokeStmt, contextMethod);
-                    Map<ForwardQuery, AbstractBoomerangResults.Context> allocNew = PointerAnalysis.allocSites;
-                    ForwardQuery allocQuery = null;
-                    if (!allocSites.isEmpty()) {
-                        Unit lamU = searchLambdaInvoke(allocSites, lambdaVar);
-
-                        JAssignStmt assign = (JAssignStmt) lamU;
-                        SootClass runClass = ((JNewExpr) assign.getRightOp()).getBaseType().getSootClass();
-                        runMethod = runClass.getMethod("void run()");
-                    }
-                }
-
-            }
-        }
-
-        return runMethod;
-    }
 
     public static String escapeXml(String input) {
         return input
