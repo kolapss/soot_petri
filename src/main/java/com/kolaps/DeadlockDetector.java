@@ -1,7 +1,17 @@
 package com.kolaps;
 
+import com.kolaps.model.LambdaInfoEntry;
+import com.kolaps.model.LambdaMethods;
+import com.kolaps.model.UMPair;
+import fr.lip6.move.pnml.ptnet.Arc;
 import fr.lip6.move.pnml.ptnet.hlapi.PlaceHLAPI;
+import soot.Body;
+import soot.PatchingChain;
+import soot.SootMethod;
 import soot.Unit;
+import soot.jimple.InvokeExpr;
+import soot.jimple.MonitorStmt;
+import soot.jimple.Stmt;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -13,6 +23,8 @@ import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
+
+import static org.fusesource.jansi.Ansi.ansi;
 
 public class DeadlockDetector {
 
@@ -166,6 +178,171 @@ public class DeadlockDetector {
         return resultDeadlockUnits;
     }
 
+    private void outputDeadlocks(List<Map<PlaceHLAPI, UMPair>> deadStatePlaceNames)
+    {
+        if (deadStatePlaceNames.isEmpty()) {
+            System.out.println("Взаимные блокировки не обнаружены");
+            return;
+        }
+        System.out.println(ansi().fgRgb(255,0,0).a("Найдено потенциальных взаимных блокировок: "+deadStatePlaceNames.size()).reset());
+        int i=1;
+        for(Map<PlaceHLAPI, UMPair> dState : deadStatePlaceNames) {
+            System.out.println(ansi().fgRgb(255,0,0).a("Блокировка №"+String.valueOf(i)).reset());
+            for(Map.Entry<PlaceHLAPI, UMPair> entry : dState.entrySet()) {
+                PlaceHLAPI place = entry.getKey();
+                List<Arc> outArcs = place.getOutArcs();
+                boolean isPreEndPlace = false;
+                for(Arc arc : outArcs) {
+                    if(arc.getTarget().getId().equals("END_p1"))
+                    {
+                        isPreEndPlace = true;
+                        break;
+                    }
+                }
+                if(isPreEndPlace) {break;}
+                UMPair p = entry.getValue();
+                SootMethod threadMethod = p.getSootMethod();
+                LambdaInfoEntry lm = findLambdasCallingMethod(threadMethod);
+                if (p.getUnit() instanceof MonitorStmt)
+                {
+                    System.out.println("    Поток ожидает ресурс "+ ansi().fgRgb(17,255,0).a(((MonitorStmt) p.getUnit()).getOp()));
+                    System.out.print(ansi().fgRgb(218,196,0).a("    Место старта потока: ").reset());
+                    System.out.print(lm.getInvokeStmt().toString() + ansi().fgRgb(218,196,0).a(" в методе ").reset()+lm.getInvokeMethod().toString()+"\n");
+                    System.out.println("");
+                    printUnitContext(p.getSootMethod(),p.getUnit());
+                    System.out.println("");
+                }
+            }
+            i++;
+        }
+
+    }
+
+    /**
+     * Находит указанный юнит в теле метода и выводит его контекст:
+     * 8 предыдущих юнитов, сам юнит (выделенный цветом) и 8 следующих юнитов.
+     * Все юниты выводятся с отступом в 2 таба.
+     *
+     * @param method SootMethod, в котором производится поиск.
+     * @param targetUnit Искомый Unit.
+     */
+    public static void printUnitContext(SootMethod method, Unit targetUnit) {
+
+        String indent = "\t\t"; // Два таба для отступа
+
+
+
+        Body body = method.getActiveBody();
+        PatchingChain<Unit> units = body.getUnits(); // Получаем все юниты в порядке их следования
+
+        // Преобразуем PatchingChain в List для удобного доступа по индексу
+        List<Unit> unitList = new ArrayList<>(units);
+
+        int targetIndex = -1;
+        for (int i = 0; i < unitList.size(); i++) {
+            // Сравниваем объекты Unit напрямую (по ссылке),
+            // так как targetUnit должен быть одним из юнитов из body.getUnits()
+            if (unitList.get(i) == targetUnit) {
+                targetIndex = i;
+                break;
+            }
+        }
+
+        if (targetIndex == -1) {
+            System.out.println(indent + "Указанный юнит не найден в методе: " + method.getSignature());
+            // Можно также вывести сам targetUnit.toString() для отладки
+            System.out.println(indent + "Искомый юнит: " + targetUnit.toString());
+            return;
+        }
+
+        System.out.println(indent + "Контекст для юнита в методе: " + method.getSignature());
+        System.out.println(indent + "--------------------------------------------------");
+
+        int contextSize = 8;
+
+        // Вывод предыдущих 8 юнитов
+        int startIndex = Math.max(0, targetIndex - contextSize);
+        for (int i = startIndex; i < targetIndex; i++) {
+            System.out.println(indent + unitList.get(i).toString());
+        }
+
+        // Вывод целевого юнита с подсветкой
+        // Используем статический импорт org.fusesource.jansi.Ansi.ansi
+        System.out.println(indent + ansi().fgRgb(17, 255, 0).a(targetUnit.toString()).reset());
+
+
+        // Вывод следующих 8 юнитов
+        // +1, так как targetIndex уже выведен
+        int endIndex = Math.min(unitList.size(), targetIndex + 1 + contextSize);
+        for (int i = targetIndex + 1; i < endIndex; i++) {
+            System.out.println(indent + unitList.get(i).toString());
+        }
+        System.out.println(indent + "--------------------------------------------------");
+
+    }
+
+    /**
+     * Находит LambdaInfoEntry, чей runMethod вызывает указанный targetMethod.
+     *
+     * @param targetMethod Метод Soot, вызов которого мы ищем.
+     * @return Список LambdaInfoEntry, удовлетворяющих условию.
+     */
+    public LambdaInfoEntry findLambdasCallingMethod(SootMethod targetMethod) {
+        LambdaInfoEntry foundEntry = null;
+        List<LambdaInfoEntry> allEntries = LambdaMethods.getAllEntries();
+
+        if (targetMethod == null) {
+            System.err.println("Предупреждение: targetMethod для поиска равен null. Поиск не будет выполнен.");
+            return null; // Возвращаем пустой список, если целевой метод null
+        }
+
+        for (LambdaInfoEntry entry : allEntries) {
+            SootMethod runMethod = entry.getRunMethod();
+
+            if (runMethod == null) {
+                // Пропускаем, если у записи нет runMethod
+                continue;
+            }
+
+            // Важно: убедитесь, что для runMethod загружено тело (body)
+            // Это может потребовать определенных настроек Soot перед анализом.
+            // Если Soot не был настроен на загрузку тел методов (например, если это библиотечный метод
+            // без исходников или класс не был помечен как application class), то hasActiveBody() вернет false.
+            if (runMethod.hasActiveBody()) {
+                Body body = runMethod.getActiveBody();
+                for (Unit unit : body.getUnits()) {
+                    // Юнит должен быть инструкцией (Stmt)
+                    if (unit instanceof Stmt) {
+                        Stmt stmt = (Stmt) unit;
+                        // Проверяем, содержит ли инструкция вызов метода
+                        if (stmt.containsInvokeExpr()) {
+                            InvokeExpr invokeExpr = stmt.getInvokeExpr();
+                            SootMethod calledMethod = invokeExpr.getMethod();
+
+                            // Сравниваем вызванный метод с целевым методом
+                            // Сравнение по ссылке (==) обычно корректно для объектов SootMethod,
+                            // так как Soot стремится к уникальности этих объектов.
+                            // Для большей надежности можно сравнивать по сигнатуре, если есть сомнения.
+                            if (calledMethod.equals(targetMethod)) {
+                                foundEntry=entry;
+                                // Если нашли вызов, можно прекратить поиск в текущем runMethod
+                                // и перейти к следующему LambdaInfoEntry, если нам нужен только факт вызова.
+                                // Если нужно найти ВСЕ вызовы в одном runMethod или если
+                                // одна LambdaInfoEntry может быть добавлена только один раз,
+                                // то этот break важен.
+                                break;
+                            }
+                        }
+                    }
+                }
+            } else {
+                // Вывести предупреждение, если тело метода отсутствует, но ожидалось
+                System.err.println("Предупреждение: Метод " + runMethod.getSignature() + " не имеет активного тела (active body). Пропускается.");
+            }
+        }
+        return foundEntry;
+    }
+
     public void run() {
         Map<PlaceHLAPI, UMPair> ptUnits = PetriNetModeler.getPtUnits();
 
@@ -185,24 +362,12 @@ public class DeadlockDetector {
 
         // 3. Парсим вывод tedd
         List<List<String>> deadStatePlaceNames = parseDeadStatesFromTeddOutput(teddOutput);
-        System.out.println("\n---- Parsed Dead State Place Names ----");
-        deadStatePlaceNames.forEach(marking ->
-                System.out.println(marking.stream().collect(Collectors.joining(", ")))
-        );
+        if(deadStatePlaceNames.isEmpty()) {return;}
 
         // 4. Сопоставляем имена мест с Unit'ами
         List<Map<PlaceHLAPI, UMPair>> deadlockUnits = mapPlacesToUnits(deadStatePlaceNames, ptUnits);
-        System.out.println("\n---- Deadlock Units ----");
-        /*for (int i = 0; i < deadlockUnits.size(); i++) {
-            System.out.println("Deadlock Marking " + (i + 1) + ":");
-            for (Unit unit : deadlockUnits.get(i)) {
-                System.out.println("  - " + unit.getRepresentation() + " (from place: " +
-                        ptUnits.entrySet().stream()
-                                .filter(entry -> entry.getKey().equals(unit))
-                                .map(entry -> entry.getValue().getName())
-                                .findFirst().orElse("N/A") + ")");
-            }
-        }*/
+        outputDeadlocks(deadlockUnits);
+
 
     }
 }

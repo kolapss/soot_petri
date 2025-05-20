@@ -1,4 +1,4 @@
-package com.kolaps;
+package com.kolaps.model;
 
 import soot.SootMethod;
 import soot.Unit;
