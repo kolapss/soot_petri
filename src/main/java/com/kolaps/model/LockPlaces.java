@@ -1,5 +1,6 @@
-package com.kolaps;
+package com.kolaps.model;
 
+import com.kolaps.PetriNetBuilder;
 import fr.lip6.move.pnml.ptnet.hlapi.PTMarkingHLAPI;
 import fr.lip6.move.pnml.ptnet.hlapi.PlaceHLAPI;
 import soot.Local;

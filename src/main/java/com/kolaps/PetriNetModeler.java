@@ -1,5 +1,6 @@
 package com.kolaps;
 
+import com.kolaps.model.UMPair;
 import fr.lip6.move.pnml.framework.utils.exception.InvalidIDException;
 import fr.lip6.move.pnml.framework.utils.exception.VoidRepositoryException;
 import fr.lip6.move.pnml.ptnet.hlapi.*;

@@ -6,9 +6,10 @@ import boomerang.scene.AllocVal;
 import boomerang.scene.jimple.JimpleMethod;
 import boomerang.scene.jimple.JimpleVal;
 import boomerang.util.AccessPath;
-import com.kolaps.analyses.AliasingAnalysis;
 import com.kolaps.analyses.BoomAnalysis;
 import com.kolaps.analyses.SparkAnalysis;
+import com.kolaps.model.LambdaMethods;
+import com.kolaps.model.LockPlaces;
 import fr.lip6.move.pnml.framework.general.PnmlExport;
 import fr.lip6.move.pnml.framework.utils.ModelRepository;
 import fr.lip6.move.pnml.framework.utils.exception.*;
@@ -1209,6 +1210,7 @@ public class PetriNetBuilder {
         //Pair<Set<AccessPath>, Map<ForwardQuery, AbstractBoomerangResults.Context>> ali = analyzer.runAnalyses(query, targetClass, contextMethod.getName());
 
         if (!startClass.toString().equals("java.lang.Thread")) {
+            LambdaMethods.addEntry(startClass.getMethod("void run()"),contextMethod, query, invokeStmt);
             return startClass.getMethod("void run()");
         } else {
             Map<ForwardQuery, AbstractBoomerangResults.Context> allocSites = ali.getValue();
@@ -1227,6 +1229,7 @@ public class PetriNetBuilder {
                             SootClass lamClass = ((JStaticInvokeExpr) assign.getRightOpBox().getValue()).getMethodRef()
                                     .getDeclaringClass();
                             runMethod = lamClass.getMethod("void run()");
+                            LambdaMethods.addEntry(runMethod, contextMethod, lambdaVar, invokeStmt);
                             System.out.println(assign);
                             break;
                         }
@@ -1245,6 +1248,7 @@ public class PetriNetBuilder {
                             runClass = ((JStaticInvokeExpr) assign.getRightOp()).getMethodRef().getDeclaringClass();
                         }
                         runMethod = runClass.getMethod("void run()");
+                        LambdaMethods.addEntry(runMethod, contextMethod, lambdaVar, invokeStmt);
                     }
                 }
 
