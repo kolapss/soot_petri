@@ -12,6 +12,8 @@ import soot.Unit;
 import soot.jimple.InvokeExpr;
 import soot.jimple.MonitorStmt;
 import soot.jimple.Stmt;
+import soot.jimple.internal.JEnterMonitorStmt;
+import soot.jimple.internal.JInvokeStmt;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -44,7 +46,7 @@ public class DeadlockDetector {
      */
     public String runTedd(String pnmlFilePath) throws IOException, InterruptedException {
         List<String> command = new ArrayList<>();
-        command.add(Options.INSTANCE.getStringOption("tina_dir","")+"tedd");
+        command.add(Options.INSTANCE.getStringOption("tina_dir", "") + "tedd");
         command.add(pnmlFilePath);
         command.add("-dead-states");
         command.add("-v");
@@ -154,9 +156,9 @@ public class DeadlockDetector {
             for (String placeName : placeNameMarking) {
                 UMPair unit = null;
                 PlaceHLAPI place = null;
-                for(Map.Entry<PlaceHLAPI, UMPair> entry :ptUnitsMap.entrySet()) {
+                for (Map.Entry<PlaceHLAPI, UMPair> entry : ptUnitsMap.entrySet()) {
                     place = entry.getKey();
-                    if(place.getId().equals(PetriNetBuilder.escapeXml(placeName))) {
+                    if (place.getId().equals(PetriNetBuilder.escapeXml(placeName))) {
                         unit = entry.getValue();
                         break;
                     }
@@ -164,7 +166,7 @@ public class DeadlockDetector {
 
                 //UMPair unit = placeNameToUnitMap.get(PetriNetBuilder.escapeXml(placeName));
                 if (unit != null) {
-                    unitMarking.put(place,unit);
+                    unitMarking.put(place, unit);
                 } else {
                     System.err.println("Warning: Place name '" + placeName + "' from tedd output not found in ptUnitsMap.");
                     // Можно добавить "заглушку" Unit или проигнорировать
@@ -178,44 +180,86 @@ public class DeadlockDetector {
         return resultDeadlockUnits;
     }
 
-    private void outputDeadlocks(List<Map<PlaceHLAPI, UMPair>> deadStatePlaceNames)
-    {
-        if (deadStatePlaceNames.isEmpty()) {
-            System.out.println("Взаимные блокировки не обнаружены");
-            return;
+    private void outputDeadlocks(List<Map<PlaceHLAPI, UMPair>> deadStatePlaceNames) {
+
+        //Make a copy
+
+        List<Map<PlaceHLAPI, UMPair>> copy = new ArrayList<>();
+
+        for (Map<PlaceHLAPI, UMPair> map : deadStatePlaceNames) {
+            Map<PlaceHLAPI, UMPair> newMap = new HashMap<>();
+            for (Map.Entry<PlaceHLAPI, UMPair> entry : map.entrySet()) {
+                PlaceHLAPI keyCopy = entry.getKey(); // или key.deepCopy(), если требуется глубокая копия
+                UMPair valueCopy = entry.getValue(); // или value.deepCopy()
+                newMap.put(keyCopy, valueCopy);
+            }
+            copy.add(newMap);
         }
-        System.out.println(ansi().fgRgb(255,0,0).a("Найдено потенциальных взаимных блокировок: "+deadStatePlaceNames.size()).reset());
-        int i=1;
-        for(Map<PlaceHLAPI, UMPair> dState : deadStatePlaceNames) {
-            System.out.println(ansi().fgRgb(255,0,0).a("Блокировка №"+String.valueOf(i)).reset());
-            for(Map.Entry<PlaceHLAPI, UMPair> entry : dState.entrySet()) {
+
+        for (Map<PlaceHLAPI, UMPair> dState : deadStatePlaceNames) {
+            //System.out.println(ansi().fgRgb(255,0,0).a("Блокировка №"+String.valueOf(i)).reset());
+            List<PlaceHLAPI> toRemove = new ArrayList<>();
+            for (Map.Entry<PlaceHLAPI, UMPair> entry : dState.entrySet()) {
                 PlaceHLAPI place = entry.getKey();
                 List<Arc> outArcs = place.getOutArcs();
                 boolean isPreEndPlace = false;
-                for(Arc arc : outArcs) {
-                    if(arc.getTarget().getId().equals("END_p1"))
-                    {
+                for (Arc arc : outArcs) {
+                    if (arc.getTarget().getId().equals("t0")) {
                         isPreEndPlace = true;
                         break;
                     }
                 }
-                if(isPreEndPlace) {break;}
+                if (isPreEndPlace) {
+                    toRemove.add(entry.getKey());
+                    continue;
+                }
                 UMPair p = entry.getValue();
                 SootMethod threadMethod = p.getSootMethod();
                 LambdaInfoEntry lm = findLambdasCallingMethod(threadMethod);
-                if (p.getUnit() instanceof MonitorStmt)
-                {
-                    System.out.println("    Поток ожидает ресурс "+ ansi().fgRgb(17,255,0).a(((MonitorStmt) p.getUnit()).getOp()));
+                if (p.getUnit() instanceof MonitorStmt) {
+                    /*System.out.println("    Блокировка после захвата ресурса "+ ansi().fgRgb(17,255,0).a(((MonitorStmt) p.getUnit()).getOp()));
                     System.out.print(ansi().fgRgb(218,196,0).a("    Место старта потока: ").reset());
                     System.out.print(lm.getInvokeStmt().toString() + ansi().fgRgb(218,196,0).a(" в методе ").reset()+lm.getInvokeMethod().toString()+"\n");
                     System.out.println("");
                     printUnitContext(p.getSootMethod(),p.getUnit());
-                    System.out.println("");
+                    System.out.println("");*/
+                } else {
+                    toRemove.add(entry.getKey());
                 }
+            }
+            for (PlaceHLAPI key : toRemove) {
+                dState.remove(key);
+            }
+        }
+
+        deadStatePlaceNames.removeIf(Map::isEmpty);
+        if (deadStatePlaceNames.isEmpty()) {
+            System.out.println("Взаимные блокировки не обнаружены");
+            return;
+        }
+        int i = 1;
+        System.out.println(ansi().fgRgb(255, 0, 0).a("Найдено потенциальных взаимных блокировок: " + deadStatePlaceNames.size()).reset());
+        for (Map<PlaceHLAPI, UMPair> dState : deadStatePlaceNames) {
+            System.out.println(ansi().fgRgb(255, 0, 0).a("Блокировка №" + String.valueOf(i)).reset());
+            List<PlaceHLAPI> toRemove = new ArrayList<>();
+            for (Map.Entry<PlaceHLAPI, UMPair> entry : dState.entrySet()) {
+                PlaceHLAPI place = entry.getKey();
+
+                UMPair p = entry.getValue();
+                SootMethod threadMethod = p.getSootMethod();
+                LambdaInfoEntry lm = findLambdasCallingMethod(threadMethod);
+
+                System.out.println("    Блокировка после захвата ресурса " + ansi().fgRgb(17, 255, 0).a(((MonitorStmt) p.getUnit()).getOp()));
+                System.out.print(ansi().fgRgb(218, 196, 0).a("    Место старта потока: ").reset());
+                System.out.print(lm.getInvokeStmt().toString() + ansi().fgRgb(218, 196, 0).a(" в методе ").reset() + lm.getInvokeMethod().toString() + "\n");
+                System.out.println("");
+                printUnitContext(p.getSootMethod(), p.getUnit());
+                System.out.println("");
+
             }
             i++;
         }
-
+        System.out.println("");
     }
 
     /**
@@ -223,13 +267,12 @@ public class DeadlockDetector {
      * 8 предыдущих юнитов, сам юнит (выделенный цветом) и 8 следующих юнитов.
      * Все юниты выводятся с отступом в 2 таба.
      *
-     * @param method SootMethod, в котором производится поиск.
+     * @param method     SootMethod, в котором производится поиск.
      * @param targetUnit Искомый Unit.
      */
     public static void printUnitContext(SootMethod method, Unit targetUnit) {
 
         String indent = "\t\t"; // Два таба для отступа
-
 
 
         Body body = method.getActiveBody();
@@ -324,7 +367,7 @@ public class DeadlockDetector {
                             // так как Soot стремится к уникальности этих объектов.
                             // Для большей надежности можно сравнивать по сигнатуре, если есть сомнения.
                             if (calledMethod.equals(targetMethod)) {
-                                foundEntry=entry;
+                                foundEntry = entry;
                                 // Если нашли вызов, можно прекратить поиск в текущем runMethod
                                 // и перейти к следующему LambdaInfoEntry, если нам нужен только факт вызова.
                                 // Если нужно найти ВСЕ вызовы в одном runMethod или если
@@ -346,23 +389,26 @@ public class DeadlockDetector {
     public void run() {
         Map<PlaceHLAPI, UMPair> ptUnits = PetriNetModeler.getPtUnits();
 
-         //2. Имитируем вызов tedd (или вызываем реально)
-         //Для реального вызова, укажите путь к вашему PNML файлу
-         String pnmlFilePath = Options.INSTANCE.getStringOption("app.pnml_file","");
-         String teddOutput;
-         try {
-             teddOutput = runTedd(pnmlFilePath);
-             System.out.println("---- Tedd Output ----\n" + teddOutput);
-         } catch (IOException | InterruptedException e) {
-             System.err.println("Error running tedd: " + e.getMessage());
-             e.printStackTrace();
-             return;
-         }
+        //2. Имитируем вызов tedd (или вызываем реально)
+        //Для реального вызова, укажите путь к вашему PNML файлу
+        //String pnmlFilePath = Options.INSTANCE.getStringOption("app.pnml_file","");
+        String pnmlFilePath = "example.pnml";
+        String teddOutput;
+        try {
+            teddOutput = runTedd(pnmlFilePath);
+            System.out.println("---- Tedd Output ----\n" + teddOutput);
+        } catch (IOException | InterruptedException e) {
+            System.err.println("Error running tedd: " + e.getMessage());
+            e.printStackTrace();
+            return;
+        }
 
 
         // 3. Парсим вывод tedd
         List<List<String>> deadStatePlaceNames = parseDeadStatesFromTeddOutput(teddOutput);
-        if(deadStatePlaceNames.isEmpty()) {return;}
+        if (deadStatePlaceNames.isEmpty()) {
+            return;
+        }
 
         // 4. Сопоставляем имена мест с Unit'ами
         List<Map<PlaceHLAPI, UMPair>> deadlockUnits = mapPlacesToUnits(deadStatePlaceNames, ptUnits);

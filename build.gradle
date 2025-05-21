@@ -15,7 +15,7 @@ dependencies {
     testImplementation platform('org.junit:junit-bom:5.10.0')
     testImplementation 'org.junit.jupiter:junit-jupiter'
 
-    implementation 'org.soot-oss:soot:4.6.0'
+    implementation 'org.soot-oss:soot:4.2.0'
 
     implementation 'fr.lip6.pnml:fr.lip6.pnml.framework.coremodel:2.2.12'
     implementation 'fr.lip6.pnml:fr.lip6.pnml.framework.pthlpng:2.2.12'
