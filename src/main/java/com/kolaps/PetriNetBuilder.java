@@ -3,6 +3,7 @@ package com.kolaps;
 import boomerang.ForwardQuery;
 import boomerang.results.AbstractBoomerangResults;
 import boomerang.scene.AllocVal;
+import boomerang.scene.Val;
 import boomerang.scene.jimple.JimpleMethod;
 import boomerang.scene.jimple.JimpleVal;
 import boomerang.util.AccessPath;
@@ -324,12 +325,12 @@ public class PetriNetBuilder {
             }
         }
         endSwitchUnit = cUnit;
-        List<UnitBox> targetBoxes = table.getTargetBoxes();
+        List<Unit> targetBoxes = table.getTargets();
         //targetBoxes.add(table.getDefaultTargetBox());
         PlaceHLAPI entrySwitchPlace = createPlace(escapeXml("entrySwitch_"), mainPage, stmt, method);
         PlaceHLAPI endSwitchPlace = createPlace("endSwitch_", mainPage, stmt, method);
-        for (UnitBox box : targetBoxes) {
-            Unit entryUnit = box.getUnit();
+        for (Unit box : targetBoxes) {
+            Unit entryUnit = box;
             Queue<Pair<Unit, PlaceHLAPI>> ifWorklist = new ArrayDeque<>();
             Pair<Unit, PlaceHLAPI> key = new Pair<>(entryUnit, entrySwitchPlace);
             ifWorklist.add(key);
@@ -353,7 +354,7 @@ public class PetriNetBuilder {
             createArc(t, entrySwitchPlace, mainPage);
             handleSuccessors(endSwitchUnit, endSwitchPlace, afterPlace, graph, worklist, visitedUnits, method, endPlaceMethod, true);
         }
-        System.out.println("g");
+
     }
 
     private PlaceHLAPI processBrunch(SootMethod method, PlaceHLAPI entryPlace, Set<SootMethod> visitedOnPath,
@@ -446,7 +447,6 @@ public class PetriNetBuilder {
             }
             trueList.add(cUnit);
         }
-        PlaceHLAPI entryIfPlace = createPlace(escapeXml("entry_" + stmt.toString()), mainPage, stmt, method);
         Queue<Pair<Unit, PlaceHLAPI>> ifWorklist = new ArrayDeque<>();
         Loop selectedCycle = null;
         for (Loop f : loopNestTree) {
@@ -456,6 +456,7 @@ public class PetriNetBuilder {
             }
         }
         if (selectedCycle == null) {
+            PlaceHLAPI entryIfPlace = createPlace(escapeXml("entry_" + stmt.toString()), mainPage, stmt, method);
             Pair<Unit, PlaceHLAPI> key = new Pair<>(trueUnit, entryIfPlace);
             ifWorklist.add(key);
             boolean isIfElse = !cUnit.equals(falseUnit);
@@ -600,6 +601,8 @@ public class PetriNetBuilder {
         PlaceHLAPI waitPlace = triple.getWait(allocUnit, method);
         PlaceHLAPI lockPlace = triple.getLock(allocUnit, method);
         PlaceHLAPI notifyPlace = triple.getNotify(allocUnit, method);
+        triple.setVar((Local)monitor);
+
         String monitorId = monitor.toString();
 
 
@@ -633,6 +636,7 @@ public class PetriNetBuilder {
         PlaceHLAPI waitPlace = triple.getWait(allocUnit, method);
         PlaceHLAPI lockPlace = triple.getLock(allocUnit, method);
         PlaceHLAPI notifyPlace = triple.getNotify(allocUnit, method);
+        triple.setVar((Local)monitor);
         String monitorId = monitor.toString();
 
 
@@ -700,10 +704,12 @@ public class PetriNetBuilder {
         returnPlaceStack.push(afterPlace);
 
         // --- Recursive Call ---
+        PlaceHLAPI endInvokePlace=null;
         try {
-            PlaceHLAPI endInvokePlace = traverseMethod(targetMethod, currentPlace, visitedOnPath, afterPlace); // Recurse
+            endInvokePlace = traverseMethod(targetMethod, currentPlace, visitedOnPath, afterPlace); // Recurse
             if (endInvokePlace != null) {
-                createArc(endInvokePlace, this.endTransition, this.mainPage);
+                endPlaceMethod.setPlace(endInvokePlace);
+                //createArc(endInvokePlace, this.endTransition, this.mainPage);
             }
         } finally {
             // Pop the stack after the recursive call returns (or throws)
@@ -722,7 +728,12 @@ public class PetriNetBuilder {
         // --- Add Successor to Worklist ---
         // The successor unit(s) after the call statement should be processed,
         // starting from the 'returnPlace'.
+        if(endInvokePlace==null){
         handleSuccessors(stmt, currentPlace, afterPlace, graph, worklist, visitedUnits, currentMethod, endPlaceMethod, true);
+        }else
+        {
+            handleSuccessors(stmt, endInvokePlace, afterPlace, graph, worklist, visitedUnits, currentMethod, endPlaceMethod, true);
+        }
     }
 
     private boolean isApplicationClass(SootMethod method) {
@@ -927,7 +938,7 @@ public class PetriNetBuilder {
                 "enter_" + escapeXml(monitor.toString() + "_" + method.toString()), mainPage);
         createArc(currentPlace, enterTransition, mainPage); // Arc from current control flow place
         createArc(lockPlace, enterTransition, mainPage); // Arc from lock resource place (needs token)
-        PlaceHLAPI afterLock = createPlace("after_" + lockPlace.getId(), mainPage, unit, method);
+        PlaceHLAPI afterLock = createPlace("afterLock_" + monitor.toString() + escapeXml(method.toString()), mainPage, unit, method);
         createArc(enterTransition, afterLock, mainPage);
         endPlaceMethod.setPlace(afterLock);
 
@@ -1236,8 +1247,13 @@ public class PetriNetBuilder {
                     }
                 } else {
                     String lambdaVar = args.get(0).toString();
-                    PointerAnalysis.getAllocThreadStart(invokeStmt, contextMethod);
+                    //PointerAnalysis.getAllocThreadStart(invokeStmt, contextMethod);
+                    Unit allU = getAllocUnit(contextMethod, lambdaVar);
+                    Pair<Set<AccessPath>, Map<ForwardQuery, AbstractBoomerangResults.Context>> labPair = BoomAnalysis.runAnalysis(contextMethod, lambdaVar, allU);
+                    allocSites = labPair.getValue();
                     if (!allocSites.isEmpty()) {
+                        ForwardQuery g = allocSites.keySet().iterator().next();
+                        lambdaVar = g.var().getVariableName();
                         Unit lamU = searchLambdaInvoke(allocSites, lambdaVar);
 
                         JAssignStmt assign = (JAssignStmt) lamU;
@@ -1258,6 +1274,41 @@ public class PetriNetBuilder {
         return runMethod;
     }
 
+    private Unit getAllocUnit(SootMethod method, String query) {
+        if (method == null || query == null || query.isEmpty()) {
+            System.err.println("Метод или имя переменной не могут быть null/пустыми.");
+            return null;
+        }
+
+        // Проверяем, есть ли у метода активное тело (например, абстрактные методы его не имеют)
+        if (!method.hasActiveBody()) {
+            // System.out.println("Метод " + method.getSignature() + " не имеет активного тела.");
+            return null;
+        }
+
+        Body body = method.getActiveBody();
+
+        // Проходим по всем юнитам (инструкциям) в теле метода
+        for (Unit unit : body.getUnits()) {
+            // Нас интересуют только инструкции присваивания
+            if (unit instanceof JAssignStmt) {
+                JAssignStmt assignStmt = (JAssignStmt) unit;
+                Value leftOp = assignStmt.getLeftOp(); // Левый операнд (чему присваиваем)
+
+                // Проверяем, является ли левый операнд локальной переменной
+                if (leftOp instanceof Local) {
+                    Local local = (Local) leftOp;
+                    // Сравниваем имя локальной переменной с запрошенным именем
+                    if (local.getName().equals(query)) {
+                        return unit; // Нашли! Возвращаем юнит присваивания.
+                    }
+                }
+            }
+        }
+
+        // Если ничего не нашли после прохода по всем юнитам
+        return null;
+    }
 
     public static String escapeXml(String input) {
         return input

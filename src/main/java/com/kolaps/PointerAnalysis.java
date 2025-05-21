@@ -35,6 +35,8 @@ public class PointerAnalysis {
 
 
     public static Set<AccessPath> getAllocThreadStart(Unit unit, SootMethod method) {
+        allocSites = null;
+        allAliases = null;
         Transformer executor = new SceneTransformer() {
             protected void internalTransform(
                     String phaseName, @SuppressWarnings("rawtypes") Map options) {

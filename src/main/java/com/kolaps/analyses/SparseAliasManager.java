@@ -177,11 +177,11 @@ public class SparseAliasManager {
         if (disableAliasing) {
             return null;
         }
-        Stopwatch stopwatch = Stopwatch.createStarted();
+        //Stopwatch stopwatch = Stopwatch.createStarted();
         BackwardQuery query = createQuery(stmt, method, value);
         Pair<Set<AccessPath>,Map<ForwardQuery, AbstractBoomerangResults.Context>> aliases = getAliases(query);
-        Duration elapsed = stopwatch.elapsed();
-        totalAliasingDuration = totalAliasingDuration.plus(elapsed);
+        //Duration elapsed = stopwatch.elapsed();
+        //totalAliasingDuration = totalAliasingDuration.plus(elapsed);
         return aliases;
     }
 

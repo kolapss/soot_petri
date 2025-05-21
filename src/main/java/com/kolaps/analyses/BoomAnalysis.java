@@ -67,7 +67,7 @@ public class BoomAnalysis {
         @Override
         public StaticFieldStrategy getStaticFieldStrategy() {
 
-            return StaticFieldStrategy.SINGLETON;
+            return StaticFieldStrategy.FLOW_SENSITIVE;
         }
 
         @Override
@@ -102,15 +102,15 @@ public class BoomAnalysis {
             @Override
             public boolean isExcluded(DeclaredMethod method) {
                 JimpleDeclaredMethod m = (JimpleDeclaredMethod)method;
-                //return !((SootClass)m.getDeclaringClass().getDelegate()).isApplicationClass();
-                return false;
+                return !((SootClass)m.getDeclaringClass().getDelegate()).isApplicationClass();
+                //return false;
             }
 
             @Override
             public boolean isExcluded(Method method) {
                 JimpleMethod m = (JimpleMethod)method;
-                //return !((SootClass)m.getDeclaringClass().getDelegate()).isApplicationClass();
-                return false;
+                return !((SootClass)m.getDeclaringClass().getDelegate()).isApplicationClass();
+                //return false;
             }
         };
         boomerangSolver = new Boomerang(sootCallGraph, dat, new BoomerangOptions(SparseCFGCache.SparsificationStrategy.NONE, false));

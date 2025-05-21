@@ -29,6 +29,7 @@ public class Main {
     public static void main(String[] args) {
 
         //PetriNetDocHLAPI pt = importPNML();
+        Options.INSTANCE.setOption("app.pnml_file", System.getenv("fpath") + "\\exporttest.pnml");
         String jarFilePath = null;
         String jdkPath = System.getProperty("java.home");
         System.out.println("JDK path: " + jdkPath);
@@ -54,7 +55,6 @@ public class Main {
             throw new RuntimeException(e);
         }
         BytecodeParser.parseProgram(jarFilePath, builder);
-        Options.INSTANCE.setOption("app.pnml_file", System.getenv("fpath") + "\\exporttest.pnml");
         try {
             builder.exportToPnml();
         } catch (OtherException | ValidationFailedException | BadFileFormatException | IOException |
