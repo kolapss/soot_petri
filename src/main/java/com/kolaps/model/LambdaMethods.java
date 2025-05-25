@@ -7,16 +7,13 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Класс для хранения коллекции объектов MethodInfoEntry.
+ * Класс для хранения коллекции объектов, связанные с конкретным lambda-выражением.
  */
 public class LambdaMethods {
 
-    // Статическое поле для хранения записей
     private static final List<LambdaInfoEntry> entries = new ArrayList<>();
 
-    // Приватный конструктор, чтобы предотвратить создание экземпляров этого служебного класса
     private LambdaMethods() {
-        // Этот конструктор никогда не должен вызываться.
         throw new AssertionError("Cannot instantiate static utility class");
     }
 
@@ -26,21 +23,16 @@ public class LambdaMethods {
      */
     public static void addEntry(LambdaInfoEntry entry) {
         if (entry != null) {
-            // Если требуется потокобезопасность, здесь нужна синхронизация
-            // synchronized (entries) {
             entries.add(entry);
-            // }
         }
     }
 
     /**
-     * Удобный метод для добавления новой записи путем передачи отдельных полей.
+     * Метод для добавления новой записи путем передачи отдельных полей.
      */
     public static void addEntry(SootMethod runMethod, SootMethod invokeMethod, String lambdaVar, Unit invokeStmt) {
         LambdaInfoEntry entry = new LambdaInfoEntry(runMethod, invokeMethod, lambdaVar, invokeStmt);
-        // synchronized (entries) {
         entries.add(entry);
-        // }
     }
 
     /**
@@ -48,12 +40,7 @@ public class LambdaMethods {
      * @return Неизменяемый список записей или копия списка для предотвращения внешних модификаций.
      */
     public static List<LambdaInfoEntry> getAllEntries() {
-        // synchronized (entries) {
-        // Возвращаем копию, чтобы внутренний список не мог быть изменен извне
         return new ArrayList<>(entries);
-        // Альтернативно, для неизменяемого представления:
-        // return Collections.unmodifiableList(new ArrayList<>(entries)); // копия + неизменяемость
-        // }
     }
 
     /**
@@ -63,9 +50,7 @@ public class LambdaMethods {
      * @throws IndexOutOfBoundsException если индекс выходит за пределы.
      */
     public static LambdaInfoEntry getEntry(int index) {
-        // synchronized (entries) {
         return entries.get(index);
-        // }
     }
 
     /**
@@ -73,18 +58,14 @@ public class LambdaMethods {
      * @return Количество записей.
      */
     public static int getSize() {
-        // synchronized (entries) {
         return entries.size();
-        // }
     }
 
     /**
      * Очищает все записи из хранилища.
      */
     public static void clearEntries() {
-        // synchronized (entries) {
         entries.clear();
-        // }
     }
 
     /**
@@ -94,9 +75,7 @@ public class LambdaMethods {
      * @throws IndexOutOfBoundsException если индекс выходит за пределы.
      */
     public static LambdaInfoEntry removeEntry(int index) {
-        // synchronized (entries) {
         return entries.remove(index);
-        // }
     }
 
     /**
@@ -105,8 +84,6 @@ public class LambdaMethods {
      * @return true, если запись была удалена, иначе false.
      */
     public static boolean removeEntry(LambdaInfoEntry entry) {
-        // synchronized (entries) {
         return entries.remove(entry);
-        // }
     }
 }

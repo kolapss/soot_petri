@@ -8,31 +8,18 @@ import fr.lip6.move.pnml.framework.utils.exception.*;
 import fr.lip6.move.pnml.ptnet.hlapi.PetriNetDocHLAPI;
 
 import java.io.File;
-import java.io.FileNotFoundException;
 import java.io.IOException;
 
 public class Main {
 
 
-    /*static {
-        try {
-            try {
-                pnml = new PetriNetBuilder();
-            } catch (OtherException | ValidationFailedException | BadFileFormatException | IOException |
-                     OCLValidationFailed | UnhandledNetType e) {
-                throw new RuntimeException(e);
-            }
-        } catch (InvalidIDException | VoidRepositoryException e) {
-            throw new RuntimeException(e);
-        }
-    }*/
     public static void main(String[] args) {
 
         //PetriNetDocHLAPI pt = importPNML();
         Options.INSTANCE.setOption("app.pnml_file", System.getenv("fpath") + "\\exporttest.pnml");
         String jarFilePath = null;
         String jdkPath = System.getProperty("java.home");
-        System.out.println("JDK path: " + jdkPath);
+        System.out.println("JDK путь: " + jdkPath);
         // Парсим аргументы
         for (int i = 0; i < args.length; i++) {
             if ("-f".equals(args[i]) && i + 1 < args.length) {
@@ -54,7 +41,7 @@ public class Main {
                  BadFileFormatException | IOException | OCLValidationFailed | UnhandledNetType e) {
             throw new RuntimeException(e);
         }
-        BytecodeParser.parseProgram(jarFilePath, builder);
+        SootInitializer.parseProgram(jarFilePath, builder);
         try {
             builder.exportToPnml();
         } catch (OtherException | ValidationFailedException | BadFileFormatException | IOException |
@@ -76,23 +63,22 @@ public class Main {
         fr.lip6.move.pnml.ptnet.hlapi.PetriNetDocHLAPI ptDoc=null;
 
         try {
-            // Импорт документа PNML без fallback
+            // Импорт документа PNML
             HLAPIRootClass root = PNMLUtils.importPnmlDocument(pnmlFile, false);
 
             // Получение ID рабочей области документа
             String wsId = ModelRepository.getInstance().getCurrentDocWSId();
-            System.out.println("Imported document workspace ID: " + wsId);
+            System.out.println("Идентификатор импортированного документа: " + wsId);
 
             // Определение типа сети
             PNType type = PNMLUtils.determinePNType(root);
-            System.out.println("Detected Petri Net Type: " + type);
+            System.out.println("Тип сети Петри: " + type);
 
-            // Пример обработки P/T сети
+
 
             if (type == PNType.PTNET) {
                 ptDoc = (fr.lip6.move.pnml.ptnet.hlapi.PetriNetDocHLAPI) root;
-                System.out.println("Successfully imported a Place/Transition Net.");
-                // Здесь можно обработать сеть далее (места, переходы и т.д.)
+                System.out.println("Успешно импортирована сеть размещения/перехода.");
             } else {
                 System.out.println("This example only handles PTNET documents.");
             }

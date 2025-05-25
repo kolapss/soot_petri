@@ -34,14 +34,14 @@ public class PetriNetModeler {
         } else {
             id = "arc_" + arcCounter++;
         }
-        ArcHLAPI arc = null; // Вес дуги = 1.0 (обычно)
+        ArcHLAPI arc = null;
         try {
             arc = new ArcHLAPI(id, source, target, page);
         } catch (InvalidIDException | VoidRepositoryException e) {
             throw new RuntimeException(e);
         }
         arc.setContainerPageHLAPI(page);
-        System.out.println("Created Arc: " + source.getId() + " -> " + target.getId());
+        //System.out.println("Created Arc: " + source.getId() + " -> " + target.getId());
         return arc;
     }
 
@@ -59,31 +59,29 @@ public class PetriNetModeler {
             throw new RuntimeException(e);
         }
         arc.setContainerPageHLAPI(page);
-        System.out.println("Created Arc: " + source.getId() + " -> " + target.getId());
+        //System.out.println("Created Arc: " + source.getId() + " -> " + target.getId());
         return arc;
     }
 
     public static TransitionHLAPI createTransition(String baseName, PageHLAPI page) {
         String id = "t" + transitionCounter++;
         NameHLAPI name = new NameHLAPI(baseName + "_" + id);
-        NodeGraphicsHLAPI graphics = null; // Создать графику
+        NodeGraphicsHLAPI graphics = null;
         TransitionHLAPI transition = null;
         try {
             transition = new TransitionHLAPI(id, name, graphics, page);
-        } catch (InvalidIDException e) {
-            throw new RuntimeException(e);
-        } catch (VoidRepositoryException e) {
+        } catch (InvalidIDException | VoidRepositoryException e) {
             throw new RuntimeException(e);
         }
-        transition.setContainerPageHLAPI(page); // Добавить переход на страницу
-        System.out.println("Created Transition: " + name.getText() + " on Page " + page.getId());
+        transition.setContainerPageHLAPI(page); // Добавим переход на страницу
+        //System.out.println("Created Transition: " + name.getText() + " on Page " + page.getId());
         return transition;
     }
 
     public static PlaceHLAPI createPlace(String baseName, PageHLAPI page, Unit unit, SootMethod method) {
         String id = "p" + placeCounter++;
         String name = baseName + "_" + id;
-        NodeGraphicsHLAPI graphics = null; // Создать графику по необходимости
+        NodeGraphicsHLAPI graphics = null;
         PlaceHLAPI place = null;
         try {
             place = new PlaceHLAPI(name, page);
@@ -91,10 +89,9 @@ public class PetriNetModeler {
         } catch (InvalidIDException | VoidRepositoryException e) {
             throw new RuntimeException(e);
         }
-        // Установка начальной маркировки (если нужно, по умолчанию 0)
-        // place.setInitialMarking(...);
+
         place.setContainerPageHLAPI(page);
-        System.out.println("Created Place: " + name + " on Page " + page.getId());
+        //System.out.println("Created Place: " + name + " on Page " + page.getId());
         return place;
     }
 

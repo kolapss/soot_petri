@@ -12,8 +12,6 @@ import soot.Unit;
 import soot.jimple.InvokeExpr;
 import soot.jimple.MonitorStmt;
 import soot.jimple.Stmt;
-import soot.jimple.internal.JEnterMonitorStmt;
-import soot.jimple.internal.JInvokeStmt;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -24,15 +22,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import java.util.stream.Collectors;
 
 import static org.fusesource.jansi.Ansi.ansi;
 
 public class DeadlockDetector {
 
-    // Путь к исполняемому файлу tedd. Настройте, если он не в PATH.
-    //private static final String TEDD_EXECUTABLE = "tedd";
-    // Или полный путь, например: "/usr/local/bin/tedd" или "C:\\tina\\tedd.exe"
 
     private static final String SKIP_MARKING_TOKEN = "END_p1";
 
@@ -68,14 +62,6 @@ public class DeadlockDetector {
 
         int exitCode = process.waitFor();
         System.out.println("Tedd process finished with exit code: " + exitCode);
-
-        // Tina/tedd часто выводит полезную информацию в stderr, даже при успехе (код 0)
-        // или использует ненулевые коды для определенных результатов, которые не являются ошибками.
-        // Поэтому мы не будем строго проверять exitCode == 0, а просто вернем вывод.
-        // Если вам нужна строгая проверка, добавьте:
-        // if (exitCode != 0) {
-        //     throw new IOException("Tedd execution failed with exit code " + exitCode + ". Output:\n" + output.toString());
-        // }
 
         return output.toString();
     }
@@ -118,7 +104,7 @@ public class DeadlockDetector {
 
                 if (skipTokenPattern.matcher(lineWithoutBracedContent).find()) {
                     System.out.println("Skipping marking line due to presence of '" + SKIP_MARKING_TOKEN + "' outside {}: " + line);
-                    continue; // Пропускаем всю эту строку (маркировку)
+                    continue; // Пропускаем всю эту строку
                 }
 
                 Matcher matcher = placePattern.matcher(line);
@@ -143,11 +129,7 @@ public class DeadlockDetector {
      * @return Список списков Unit, соответствующий входным маркировкам.
      */
     public List<Map<PlaceHLAPI, UMPair>> mapPlacesToUnits(List<List<String>> deadStatePlaceNames, Map<PlaceHLAPI, UMPair> ptUnitsMap) {
-        // Создаем обратную карту для быстрого поиска Unit по имени места
-        Map<String, UMPair> placeNameToUnitMap = new HashMap<>();
-        for (Map.Entry<PlaceHLAPI, UMPair> entry : ptUnitsMap.entrySet()) {
-            placeNameToUnitMap.put(String.valueOf(entry.getKey().getId()), entry.getValue());
-        }
+
 
         List<Map<PlaceHLAPI, UMPair>> resultDeadlockUnits = new ArrayList<>();
 
@@ -164,13 +146,8 @@ public class DeadlockDetector {
                     }
                 }
 
-                //UMPair unit = placeNameToUnitMap.get(PetriNetBuilder.escapeXml(placeName));
                 if (unit != null) {
                     unitMarking.put(place, unit);
-                } else {
-                    System.err.println("Warning: Place name '" + placeName + "' from tedd output not found in ptUnitsMap.");
-                    // Можно добавить "заглушку" Unit или проигнорировать
-                    // unitMarking.add(new UnitImpl("UNKNOWN_UNIT_FOR_" + placeName));
                 }
             }
             if (!unitMarking.isEmpty()) {
@@ -182,19 +159,6 @@ public class DeadlockDetector {
 
     private void outputDeadlocks(List<Map<PlaceHLAPI, UMPair>> deadStatePlaceNames) {
 
-        //Make a copy
-
-        List<Map<PlaceHLAPI, UMPair>> copy = new ArrayList<>();
-
-        for (Map<PlaceHLAPI, UMPair> map : deadStatePlaceNames) {
-            Map<PlaceHLAPI, UMPair> newMap = new HashMap<>();
-            for (Map.Entry<PlaceHLAPI, UMPair> entry : map.entrySet()) {
-                PlaceHLAPI keyCopy = entry.getKey(); // или key.deepCopy(), если требуется глубокая копия
-                UMPair valueCopy = entry.getValue(); // или value.deepCopy()
-                newMap.put(keyCopy, valueCopy);
-            }
-            copy.add(newMap);
-        }
 
         for (Map<PlaceHLAPI, UMPair> dState : deadStatePlaceNames) {
             //System.out.println(ansi().fgRgb(255,0,0).a("Блокировка №"+String.valueOf(i)).reset());
@@ -215,7 +179,6 @@ public class DeadlockDetector {
                 }
                 UMPair p = entry.getValue();
                 SootMethod threadMethod = p.getSootMethod();
-                LambdaInfoEntry lm = findLambdasCallingMethod(threadMethod);
                 if (p.getUnit() instanceof MonitorStmt) {
                     /*System.out.println("    Блокировка после захвата ресурса "+ ansi().fgRgb(17,255,0).a(((MonitorStmt) p.getUnit()).getOp()));
                     System.out.print(ansi().fgRgb(218,196,0).a("    Место старта потока: ").reset());
@@ -240,10 +203,8 @@ public class DeadlockDetector {
         int i = 1;
         System.out.println(ansi().fgRgb(255, 0, 0).a("Найдено потенциальных взаимных блокировок: " + deadStatePlaceNames.size()).reset());
         for (Map<PlaceHLAPI, UMPair> dState : deadStatePlaceNames) {
-            System.out.println(ansi().fgRgb(255, 0, 0).a("Блокировка №" + String.valueOf(i)).reset());
-            List<PlaceHLAPI> toRemove = new ArrayList<>();
+            System.out.println(ansi().fgRgb(255, 0, 0).a("Блокировка №" + i).reset());
             for (Map.Entry<PlaceHLAPI, UMPair> entry : dState.entrySet()) {
-                PlaceHLAPI place = entry.getKey();
 
                 UMPair p = entry.getValue();
                 SootMethod threadMethod = p.getSootMethod();
@@ -283,8 +244,6 @@ public class DeadlockDetector {
 
         int targetIndex = -1;
         for (int i = 0; i < unitList.size(); i++) {
-            // Сравниваем объекты Unit напрямую (по ссылке),
-            // так как targetUnit должен быть одним из юнитов из body.getUnits()
             if (unitList.get(i) == targetUnit) {
                 targetIndex = i;
                 break;
@@ -293,7 +252,6 @@ public class DeadlockDetector {
 
         if (targetIndex == -1) {
             System.out.println(indent + "Указанный юнит не найден в методе: " + method.getSignature());
-            // Можно также вывести сам targetUnit.toString() для отладки
             System.out.println(indent + "Искомый юнит: " + targetUnit.toString());
             return;
         }
@@ -310,12 +268,10 @@ public class DeadlockDetector {
         }
 
         // Вывод целевого юнита с подсветкой
-        // Используем статический импорт org.fusesource.jansi.Ansi.ansi
         System.out.println(indent + ansi().fgRgb(17, 255, 0).a(targetUnit.toString()).reset());
 
 
         // Вывод следующих 8 юнитов
-        // +1, так как targetIndex уже выведен
         int endIndex = Math.min(unitList.size(), targetIndex + 1 + contextSize);
         for (int i = targetIndex + 1; i < endIndex; i++) {
             System.out.println(indent + unitList.get(i).toString());
@@ -336,7 +292,7 @@ public class DeadlockDetector {
 
         if (targetMethod == null) {
             System.err.println("Предупреждение: targetMethod для поиска равен null. Поиск не будет выполнен.");
-            return null; // Возвращаем пустой список, если целевой метод null
+            return null;
         }
 
         for (LambdaInfoEntry entry : allEntries) {
@@ -347,14 +303,9 @@ public class DeadlockDetector {
                 continue;
             }
 
-            // Важно: убедитесь, что для runMethod загружено тело (body)
-            // Это может потребовать определенных настроек Soot перед анализом.
-            // Если Soot не был настроен на загрузку тел методов (например, если это библиотечный метод
-            // без исходников или класс не был помечен как application class), то hasActiveBody() вернет false.
             if (runMethod.hasActiveBody()) {
                 Body body = runMethod.getActiveBody();
                 for (Unit unit : body.getUnits()) {
-                    // Юнит должен быть инструкцией (Stmt)
                     if (unit instanceof Stmt) {
                         Stmt stmt = (Stmt) unit;
                         // Проверяем, содержит ли инструкция вызов метода
@@ -363,23 +314,15 @@ public class DeadlockDetector {
                             SootMethod calledMethod = invokeExpr.getMethod();
 
                             // Сравниваем вызванный метод с целевым методом
-                            // Сравнение по ссылке (==) обычно корректно для объектов SootMethod,
-                            // так как Soot стремится к уникальности этих объектов.
-                            // Для большей надежности можно сравнивать по сигнатуре, если есть сомнения.
                             if (calledMethod.equals(targetMethod)) {
                                 foundEntry = entry;
                                 // Если нашли вызов, можно прекратить поиск в текущем runMethod
-                                // и перейти к следующему LambdaInfoEntry, если нам нужен только факт вызова.
-                                // Если нужно найти ВСЕ вызовы в одном runMethod или если
-                                // одна LambdaInfoEntry может быть добавлена только один раз,
-                                // то этот break важен.
                                 break;
                             }
                         }
                     }
                 }
             } else {
-                // Вывести предупреждение, если тело метода отсутствует, но ожидалось
                 System.err.println("Предупреждение: Метод " + runMethod.getSignature() + " не имеет активного тела (active body). Пропускается.");
             }
         }
@@ -389,9 +332,6 @@ public class DeadlockDetector {
     public void run() {
         Map<PlaceHLAPI, UMPair> ptUnits = PetriNetModeler.getPtUnits();
 
-        //2. Имитируем вызов tedd (или вызываем реально)
-        //Для реального вызова, укажите путь к вашему PNML файлу
-        //String pnmlFilePath = Options.INSTANCE.getStringOption("app.pnml_file","");
         String pnmlFilePath = "example.pnml";
         String teddOutput;
         try {

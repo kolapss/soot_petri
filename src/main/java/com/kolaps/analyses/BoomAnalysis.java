@@ -1,14 +1,15 @@
 package com.kolaps.analyses;
 
-import boomerang.*;
+import boomerang.BackwardQuery;
+import boomerang.Boomerang;
+import boomerang.DefaultBoomerangOptions;
+import boomerang.ForwardQuery;
 import boomerang.results.AbstractBoomerangResults;
 import boomerang.results.BackwardBoomerangResults;
 import boomerang.scene.*;
 import boomerang.scene.jimple.*;
 import boomerang.scene.sparse.SparseCFGCache;
-import boomerang.solver.BackwardBoomerangSolver;
 import boomerang.util.AccessPath;
-import boomerang.util.DefaultValueMap;
 import javafx.util.Pair;
 import soot.*;
 import soot.jimple.InvokeExpr;
@@ -20,7 +21,6 @@ import wpds.impl.Weight;
 
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 
 public class BoomAnalysis {
@@ -93,24 +93,22 @@ public class BoomAnalysis {
     }
 
     public static void setup() {
+        //PackManager.v().getPack("wjtp").apply();
         PackManager.v().getPack("cg").apply();
         BoomerangPretransformer.v().reset();
         BoomerangPretransformer.v().apply();
-        //PackManager.v().getPack("wjtp").apply();
         sootCallGraph = new SootCallGraph();
         dat = new DataFlowScope() {
             @Override
             public boolean isExcluded(DeclaredMethod method) {
                 JimpleDeclaredMethod m = (JimpleDeclaredMethod)method;
                 return !((SootClass)m.getDeclaringClass().getDelegate()).isApplicationClass();
-                //return false;
             }
 
             @Override
             public boolean isExcluded(Method method) {
                 JimpleMethod m = (JimpleMethod)method;
                 return !((SootClass)m.getDeclaringClass().getDelegate()).isApplicationClass();
-                //return false;
             }
         };
         boomerangSolver = new Boomerang(sootCallGraph, dat, new BoomerangOptions(SparseCFGCache.SparsificationStrategy.NONE, false));
@@ -125,14 +123,12 @@ public class BoomAnalysis {
                 boomerangSolver = new Boomerang(sootCallGraph, dat, new BoomerangOptions(SparseCFGCache.SparsificationStrategy.NONE, false));
                 BackwardBoomerangResults<Weight.NoWeight> results = boomerangSolver.solve(query);
                 pp =  new Pair<>(results.getAllAliases(), results.getAllocationSites());
-                System.out.println("results: " + results);
             }
         };
     }
 
     private static Pair<Set<AccessPath>, Map<ForwardQuery, AbstractBoomerangResults.Context>> getAliases(Stmt stmt, SootMethod method, Value value) {
 
-        //Boomerang boomerangSolver = new Boomerang(sootCallGraph, SootDataFlowScope.make(Scene.v()),new BoomerangOptions(SparseCFGCache.SparsificationStrategy.NONE,false));
         BackwardQuery query = createQuery(stmt, method, value);
         Transform transform =
                 new Transform(
@@ -141,20 +137,13 @@ public class BoomAnalysis {
         PackManager.v().getPack("wjtp").add(transform);
         PackManager.v().getPack("wjtp").apply();
         PackManager.v().getPack("wjtp").remove("wjtp.ifds");
-        /*boomerangSolver = new Boomerang(sootCallGraph, dat, new BoomerangOptions(SparseCFGCache.SparsificationStrategy.NONE, false));
-        BackwardBoomerangResults<Weight.NoWeight> results = boomerangSolver.solve(query);
-        Pair<Set<AccessPath>, Map<ForwardQuery, AbstractBoomerangResults.Context>> pp =  new Pair<>(results.getAllAliases(), results.getAllocationSites());
-        return pp;*/
         return pp;
-        //WeightedBoomerang<Weight> boomerang = new WeightedBoomerang<>(Scene.v().getCallGraph(), SootDataFlowScope.make(Scene.v()),new BoomerangOptions(SparseCFGCache.SparsificationStrategy.NONE,false));
     }
 
     private static BackwardQuery createQuery(Stmt stmt, SootMethod method, Value value) {
         JimpleMethod jimpleMethod = JimpleMethod.of(method);
         Statement statement = JimpleStatement.create(stmt, jimpleMethod);
         JimpleVal val = new JimpleVal(value, jimpleMethod);
-        /*Optional<Statement> first =
-                statement.getMethod().getControlFlowGraph().getSuccsOf(statement).stream().findFirst();*/
         Statement first = null, second=null;
         List<Statement> sts = statement.getMethod().getControlFlowGraph().getStatements();
 
@@ -175,18 +164,6 @@ public class BoomAnalysis {
             SootMethod method,
             String queryLHS, Unit unit) {
         String[] split = queryLHS.split("\\.");
-        /*Optional<Unit> unitOp;
-        if (split.length > 1) {
-            unitOp =
-                    method.getActiveBody().getUnits().stream()
-                            .filter(e -> e.toString().startsWith(split[0]) && e.toString().contains(split[1]))
-                            .findFirst();
-        } else {
-            unitOp =
-                    method.getActiveBody().getUnits().stream()
-                            .filter(e -> e.toString().startsWith(split[0]))
-                            .findFirst();
-        }*/
 
 
         if(unit instanceof JInvokeStmt)
