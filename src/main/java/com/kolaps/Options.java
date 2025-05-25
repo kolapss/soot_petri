@@ -7,24 +7,20 @@ import java.util.Objects;
 
 /**
  * Singleton класс для управления опциями/настройками приложения в виде пар ключ-значение.
- * Реализован с использованием шаблона Enum, который считается лучшим способом
- * создания потокобезопасных Singleton в Java, устойчивым к проблемам
- * сериализации и атакам через рефлексию.
  */
 public enum Options {
 
     /** Единственный экземпляр OptionsManager. */
-    INSTANCE; // Это объявляет единственный экземпляр перечисления, который является нашим Singleton
+    INSTANCE;
 
-    // Внутренняя карта для хранения опций. String - ключ, Object - значение (чтобы хранить разные типы).
+    // карта для хранения опций
     private final Map<String, Object> options = new HashMap<>();
 
     /**
      * Приватный конструктор.
      * Вызывается один раз при первой загрузке класса Enum (что происходит при первом доступе к INSTANCE).
      */
-    private Options() {
-        // Здесь можно загрузить настройки по умолчанию или из файла конфигурации
+    Options() {
         loadDefaultOptions();
         System.out.println("OptionsManager инициализирован.");
     }
@@ -57,24 +53,23 @@ public enum Options {
 
     /**
      * Получает значение опции в виде строки.
-     * Удобен для получения строковых настроек с значением по умолчанию.
+     * Удобен для получения строковых настроек со значением по умолчанию.
      *
      * @param key          Ключ опции (не может быть null).
      * @param defaultValue Значение по умолчанию, которое будет возвращено, если ключ не найден или значение не является строкой.
      * @return Значение опции как строка или defaultValue.
      */
     public String getStringOption(String key, String defaultValue) {
-        Object value = getOption(key); // Используем базовый геттер
+        Object value = getOption(key);
         if (value instanceof String) {
-            return (String) value; // Проверяем тип и приводим
+            return (String) value;
         }
-        // Возвращаем defaultValue, если значение null, не строка или ключ не найден
         return defaultValue;
     }
 
     /**
      * Получает значение опции в виде целого числа (Integer).
-     * Удобен для получения числовых настроек с значением по умолчанию.
+     * Удобен для получения числовых настроек со значением по умолчанию.
      *
      * @param key          Ключ опции (не может быть null).
      * @param defaultValue Значение по умолчанию, которое будет возвращено, если ключ не найден или значение не является Integer.
@@ -85,14 +80,12 @@ public enum Options {
         if (value instanceof Integer) {
             return (Integer) value;
         }
-        // При желании можно добавить обработку других числовых типов (float, double),
-        // например: if (value instanceof Number) { return ((Number) value).intValue(); }
         return defaultValue;
     }
 
     /**
      * Получает значение опции в виде булевого значения (Boolean).
-     * Удобен для получения логических настроек с значением по умолчанию.
+     * Удобен для получения логических настроек со значением по умолчанию.
      *
      * @param key          Ключ опции (не может быть null).
      * @param defaultValue Значение по умолчанию, которое будет возвращено, если ключ не найден или значение не является Boolean.
@@ -104,20 +97,6 @@ public enum Options {
             return (Boolean) value;
         }
         return defaultValue;
-    }
-
-    // При необходимости можно добавить другие типизированные геттеры (getDoubleOption, getLongOption и т.д.)
-
-    /**
-     * Удаляет опцию по ключу.
-     *
-     * @param key Ключ опции для удаления (не может быть null).
-     * @return Значение, которое было удалено, или null, если ключ не был найден.
-     */
-    public Object removeOption(String key) {
-        Objects.requireNonNull(key, "Ключ опции для удаления не может быть null");
-        System.out.println("Удалена опция: " + key);
-        return options.remove(key);
     }
 
 
@@ -145,12 +124,7 @@ public enum Options {
         options.put("app.jar", "");
         options.put("app.pnml_file", "");
 
-        // В реальном приложении здесь, скорее всего, вы бы загружали эти настройки
-        // из файла (например, .properties, XML, JSON) или базы данных.
         System.out.println("Загружены настройки по умолчанию.");
     }
 
-    // При необходимости можно добавить методы для сохранения/загрузки опций из файла:
-    // public void loadOptionsFromFile(String filePath) { ... }
-    // public void saveOptionsToFile(String filePath) { ... }
 }

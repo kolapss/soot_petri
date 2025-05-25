@@ -14,7 +14,7 @@ import java.util.jar.Attributes;
 import java.util.jar.JarFile;
 import java.util.jar.Manifest;
 
-public class BytecodeParser {
+public class SootInitializer {
 
     public static String mainClassName = null;
 
@@ -58,10 +58,10 @@ public class BytecodeParser {
         //PackManager.v().writeOutput();
         mainClass.getMethods();
         SootMethod mainMethod = mainClass.getMethodByName("main");
-        System.out.println(mainMethod.retrieveActiveBody());
+        //System.out.println(mainMethod.retrieveActiveBody());
 
         BoomAnalysis.setup();
-        PointerAnalysis.setupAnalyze();
+
         builder.build(mainClass);
 
     }
@@ -81,23 +81,13 @@ public class BytecodeParser {
         Options.v().set_no_bodies_for_excluded(true);
         Options.v().set_allow_phantom_refs(true);
 
-        /*List<String> includeList = new LinkedList<String>();
-        includeList.add("java.lang.*");
-        includeList.add("java.util.*");
-        includeList.add("java.io.*");
-        includeList.add("sun.misc.*");
-        includeList.add("java.net.*");
-        includeList.add("javax.servlet.*");
-        includeList.add("javax.crypto.*");
-
-        Options.v().set_include(includeList);*/
         Options.v().setPhaseOption("jb", "use-original-names:true");
         Options.v().setPhaseOption("jb.sils", "enabled:false");
 
         Options.v().set_soot_classpath(sootClassPath);
         Options.v().set_prepend_classpath(true);
         Options.v().set_process_dir(Collections.singletonList(com.kolaps.Options.INSTANCE.getStringOption("app.jar","")));
-        // Options.v().set_main_class(this.getTargetClass());
+
         SootClass c = null;
         c = Scene.v().forceResolve(mainClassName, SootClass.BODIES);
         if (c != null) {

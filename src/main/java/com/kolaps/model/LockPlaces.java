@@ -13,6 +13,9 @@ import java.util.Map;
 import static com.kolaps.PetriNetBuilder.escapeXml;
 import static com.kolaps.PetriNetModeler.createPlace;
 
+/**
+ * Класс для хранения мест в сети Петри, связанных с критическим ресурсом.
+ */
 public class LockPlaces {
     public enum PlaceType {
         LOCK,
@@ -40,18 +43,15 @@ public class LockPlaces {
             return varName;
         }
 
-        private final String varName; // Store varName to use it for creation
+        private final String varName;
 
-        // Constructor for PlaceTriple, takes the varName
         public PlaceTriple(String varName) {
             this.varName = varName;
-            // lock, wait, notify are implicitly null here
+            // lock, wait, notify null на этом моменте
         }
 
         public synchronized PlaceHLAPI getLock(Unit unit, SootMethod method) {
             if (lock == null) {
-                // Call the outer class's method to create the place
-                // LockPlaces.this syntax is used to refer to the outer class instance
                 lock = LockPlaces.this.createPlaceForType(varName, PlaceType.LOCK,unit, method);
             }
             return lock;
@@ -88,14 +88,12 @@ public class LockPlaces {
 
 
     private PlaceHLAPI createPlaceForType(String varName, PlaceType type, Unit unit, SootMethod method) {
-        System.out.println("Creating new " + type + " Place for identifier: " + varName);
         String placeName = type.name() + "_" + varName;
         placeName = escapeXml(placeName);
         PlaceHLAPI place = createPlace(placeName, PetriNetBuilder.getMainPage(),unit, method);
         if(type == PlaceType.LOCK) {
             new PTMarkingHLAPI(Long.valueOf(1),place);
         }
-        System.out.println("Created " + type + " Place: " + place.getId() + " (for varName: " + varName + ")");
         return place;
     }
 }

@@ -1,6 +1,5 @@
 package com.kolaps.utils;
 
-import com.kolaps.BytecodeParser;
 import com.kolaps.Options;
 
 import java.io.*;
@@ -24,13 +23,11 @@ public class RetroLambda {
             throw new IOException("Указанный путь для вывода не является директорией: " + outputDir);
         }
 
-        // --- Защита от уязвимости Zip Slip ---
         // Получаем канонический путь к выходной директории для сравнения
         String canonicalOutputDirPath = outputDirFile.getCanonicalPath();
         if (!canonicalOutputDirPath.endsWith(File.separator)) {
             canonicalOutputDirPath += File.separator;
         }
-        // --- Конец защиты ---
 
 
         // 2. Используем try-with-resources для автоматического закрытия JarFile
@@ -44,14 +41,12 @@ public class RetroLambda {
                 String entryName = entry.getName();
                 File outputFile = new File(outputDir, entryName);
 
-                // --- Проверка безопасности Zip Slip ---
                 String canonicalEntryPath = outputFile.getCanonicalPath();
                 if (!canonicalEntryPath.startsWith(canonicalOutputDirPath)) {
                     // Запись файла за пределы целевой папки! Пропускаем.
                     System.err.println("Предупреждение безопасности: Запись '" + entryName + "' пытается выйти за пределы директории '" + outputDir + "'. Пропуск.");
                     continue; // Пропускаем эту запись
                 }
-                // --- Конец проверки безопасности ---
 
 
                 if (entry.isDirectory()) {
@@ -59,9 +54,6 @@ public class RetroLambda {
                     if (!outputFile.exists()) {
                         if (!outputFile.mkdirs()) {
                             System.err.println("Предупреждение: Не удалось создать директорию: " + outputFile.getPath());
-                            // Можно решить, критично ли это. Пока просто предупреждаем.
-                        } else {
-                            //System.out.println("Создана директория: " + outputFile.getPath());
                         }
                     }
                 } else {
@@ -72,7 +64,6 @@ public class RetroLambda {
                     if (parentDir != null && !parentDir.exists()) {
                         if (!parentDir.mkdirs()) {
                             System.err.println("Предупреждение: Не удалось создать родительскую директорию: " + parentDir.getPath());
-                            // Продолжаем, но запись файла, скорее всего, не удастся
                         }
                     }
 
@@ -88,11 +79,9 @@ public class RetroLambda {
                         while ((bytesRead = bis.read(buffer)) != -1) {
                             bos.write(buffer, 0, bytesRead);
                         }
-                        //System.out.println("Извлечен файл: " + outputFile.getPath());
 
                     } catch (IOException e) {
                         System.err.println("Ошибка при извлечении файла: " + entryName + " -> " + outputFile.getPath());
-                        // Можно пробросить исключение дальше, если нужно остановить весь процесс
                         // throw new IOException("Ошибка при извлечении файла: " + entryName, e);
                         e.printStackTrace(); // Печатаем стектрейс для отладки
                     }
@@ -106,13 +95,6 @@ public class RetroLambda {
         }
     }
 
-    private static void copyStream(InputStream in, OutputStream out) throws IOException {
-        byte[] buffer = new byte[4096];
-        int bytesRead;
-        while ((bytesRead = in.read(buffer)) != -1) {
-            out.write(buffer, 0, bytesRead);  // передаем начало массива и его длину
-        }
-    }
 
     public static void deleteDirectory(Path path) throws IOException {
         if (Files.exists(path)) {
@@ -151,7 +133,6 @@ public class RetroLambda {
             throw new RuntimeException(e);
         }
 
-        String classpath = inputDir;
         String bytecodeVersion = "52";
 
 
@@ -166,7 +147,7 @@ public class RetroLambda {
                 "-Xmx512m",
                 "-Dretrolambda.inputDir=" + inputDir,
                 "-Dretrolambda.outputDir=" + outputDir,
-                "-Dretrolambda.classpath=" + classpath,
+                "-Dretrolambda.classpath=" + inputDir,
                 "-Dretrolambda.bytecodeVersion=" + bytecodeVersion,
                 "-jar", retrolambdaJar
         );
@@ -214,14 +195,6 @@ public class RetroLambda {
                         Path relativePath = sourceDir.relativize(dir);
                         String entryName = relativePath.toString().replace(File.separatorChar, '/') + "/";
 
-                        // --- Пропускаем папку META-INF, если она существует в корне ---
-                        // Хотя обычно сам MANIFEST.MF пропускается в visitFile, можно и папку пропустить
-                        // if (relativePath.getNameCount() == 1 && relativePath.toString().equalsIgnoreCase("META-INF")) {
-                        //     System.out.println("Skipping META-INF directory from source (will be created by JarOutputStream if needed).");
-                        //     return FileVisitResult.SKIP_SUBTREE; // Пропустить эту папку и все ее содержимое
-                        // }
-                        // --- Конец пропуска папки ---
-
                         JarEntry entry = new JarEntry(entryName);
                         entry.setTime(Files.getLastModifiedTime(dir).toMillis());
                         jos.putNextEntry(entry);
@@ -235,13 +208,11 @@ public class RetroLambda {
                     Path relativePath = sourceDir.relativize(file);
                     String entryName = relativePath.toString().replace(File.separatorChar, '/');
 
-                    // --- ВОТ КЛЮЧЕВАЯ ПРОВЕРКА ---
                     // Пропускаем файл манифеста, т.к. JarOutputStream сам его добавляет/управляет им.
                     if (entryName.equalsIgnoreCase(JarFile.MANIFEST_NAME)) { // JarFile.MANIFEST_NAME это "META-INF/MANIFEST.MF"
                         System.out.println("Skipping existing META-INF/MANIFEST.MF from source directory.");
                         return FileVisitResult.CONTINUE; // Просто пропускаем этот файл
                     }
-                    // --- КОНЕЦ ПРОВЕРКИ ---
 
                     JarEntry entry = new JarEntry(entryName);
                     entry.setTime(Files.getLastModifiedTime(file).toMillis());
