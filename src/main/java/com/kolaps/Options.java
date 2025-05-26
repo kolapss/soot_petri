@@ -123,6 +123,8 @@ public enum Options {
         options.put("tina_dir", System.getProperty("user.dir")+"\\tina\\");
         options.put("app.jar", "");
         options.put("app.pnml_file", "");
+        options.put("jrePath", "");
+        options.put("classPath", "");
 
         System.out.println("Загружены настройки по умолчанию.");
     }

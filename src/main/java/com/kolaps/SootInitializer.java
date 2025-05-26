@@ -1,6 +1,6 @@
 package com.kolaps;
 
-import com.kolaps.analyses.BoomAnalysis;
+import com.kolaps.analysis.BoomAnalysis;
 import com.kolaps.utils.RetroLambda;
 import soot.G;
 import soot.Scene;

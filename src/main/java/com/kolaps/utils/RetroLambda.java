@@ -117,8 +117,9 @@ public class RetroLambda {
     public static void run(String path) {
         String inputDir = System.getProperty("user.dir") + "/classes";
         String outputDir = System.getProperty("user.dir") + "/retroclasses";
-        String java8Home = "C:/Program Files/Java/jre1.8.0_271";
-        String retrolambdaJar = "D:/MyProjects/soot_petri/retrolambda/retrolambda.jar";
+        //String java8Home = "C:/Program Files/Java/jre1.8.0_271";
+        String java8Home = Options.INSTANCE.getStringOption("jrePath","");
+        String retrolambdaJar = System.getProperty("user.dir") + "\\retrolambda\\retrolambda.jar";
 
         try {
             deleteDirectory(Paths.get(inputDir));
