@@ -1,4 +1,4 @@
-package com.kolaps.analyses;
+package com.kolaps.analysis;
 
 import boomerang.BackwardQuery;
 import boomerang.Boomerang;

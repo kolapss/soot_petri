@@ -1,4 +1,4 @@
-package com.kolaps.analyses;
+package com.kolaps.analysis;
 
 import soot.Local;
 import soot.PointsToAnalysis;

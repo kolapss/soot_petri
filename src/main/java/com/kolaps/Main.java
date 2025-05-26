@@ -16,22 +16,42 @@ public class Main {
     public static void main(String[] args) {
 
         //PetriNetDocHLAPI pt = importPNML();
-        Options.INSTANCE.setOption("app.pnml_file", System.getenv("fpath") + "\\exporttest.pnml");
+        Options.INSTANCE.setOption("app.pnml_file", System.getProperty("user.dir") + "\\exporttest.pnml");
         String jarFilePath = null;
-        String jdkPath = System.getProperty("java.home");
-        System.out.println("JDK путь: " + jdkPath);
-        // Парсим аргументы
+        String classPath = null;
+        String jrePath = null;
         for (int i = 0; i < args.length; i++) {
-            if ("-f".equals(args[i]) && i + 1 < args.length) {
-                jarFilePath = args[i + 1];
-                break;
+            switch (args[i]) {
+                case "-appJar":
+                    if (i + 1 < args.length) {
+                        jarFilePath = args[++i];
+                    } else {
+                        System.err.println("Missing value for -appJar");
+                    }
+                    break;
+                case "-classPath":
+                    if (i + 1 < args.length) {
+                        Options.INSTANCE.setOption("classPath",args[++i]);
+                    } else {
+                        System.err.println("Missing value for -classPath");
+                    }
+                    break;
+                case "-jrePath":
+                    if (i + 1 < args.length) {
+                        Options.INSTANCE.setOption("jrePath", args[++i]);
+                    } else {
+                        System.err.println("Missing value for -jrePath");
+                    }
+                    break;
+                default:
+                    System.err.println("Unknown argument: " + args[i]);
             }
         }
 
         // Проверяем, передан ли файл
         if (jarFilePath == null) {
-            System.out.println("Ошибка: укажите путь к JAR-файлу с ключом -f");
-            System.out.println("Пример: java -jar stal.jar -f path/to/file.jar");
+            System.out.println("Ошибка: укажите путь к JAR-файлу с ключом -appJar");
+            System.out.println("Пример: java -jar stal.jar -appJar path/to/file.jar");
             System.exit(1);
         }
         PetriNetBuilder builder;

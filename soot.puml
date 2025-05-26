@@ -1,0 +1,280 @@
+@startuml
+class com.kolaps.Main {
++ {static} void main(String[])
+- {static} PetriNetDocHLAPI importPNML()
+}
+
+class com.kolaps.model.UMPair {
+- Unit unit
+- SootMethod sootMethod
++ Unit getUnit()
++ SootMethod getSootMethod()
++ boolean equals(Object)
++ int hashCode()
++ String toString()
+}
+
+
+class com.kolaps.SootInitializer {
++ {static} String mainClassName
++ {static} String getMainClass(String)
++ {static} void setPath(String)
++ {static} void parseProgram(String,PetriNetBuilder)
+- {static} void setupSoot(String)
+}
+
+
+class com.kolaps.analysis.BoomAnalysis {
+- {static} SootCallGraph sootCallGraph
+- {static} DataFlowScope dat
++ {static} Boomerang boomerangSolver
+- {static} Pair<Set<AccessPath>,Map<ForwardQuery,AbstractBoomerangResults.Context>> pp
++ {static} void setup()
+# {static} Transformer createAnalysisTransformer(BackwardQuery)
+- {static} Pair<Set<AccessPath>,Map<ForwardQuery,AbstractBoomerangResults.Context>> getAliases(Stmt,SootMethod,Value)
+- {static} BackwardQuery createQuery(Stmt,SootMethod,Value)
++ {static} Pair<Set<AccessPath>,Map<ForwardQuery,AbstractBoomerangResults.Context>> runAnalysis(SootMethod,String,Unit)
+}
+
+
+class com.kolaps.analysis.BoomAnalysis$BoomerangOptions {
+- SparseCFGCache.SparsificationStrategy sparsificationStrategy
+- boolean ignoreAfterQuery
++ SparseCFGCache.SparsificationStrategy getSparsificationStrategy()
++ boolean ignoreSparsificationAfterQuery()
++ int analysisTimeoutMS()
++ boolean onTheFlyCallGraph()
++ StaticFieldStrategy getStaticFieldStrategy()
++ boolean allowMultipleQueries()
++ boolean throwFlows()
++ boolean trackAnySubclassOfThrowable()
++ boolean trackStaticFieldAtEntryPointToClinit()
+}
+
+
+class com.kolaps.analysis.SparkAnalysis {
++ {static} boolean isAlias(Local,Local)
+}
+
+class com.kolaps.MyPlace {
+~ PlaceHLAPI value
+~ PlaceHLAPI getPlace()
+~ void setPlace(PlaceHLAPI)
+}
+
+
+class com.kolaps.PetriNetBuilder {
+- PetriNetDocHLAPI document
+- PetriNetHLAPI rootPetriNet
+- {static} PageHLAPI mainPage
+- {static} String strAllocValue
+- LockPlaces lockPlaces
+- Map<SootMethod,PlaceHLAPI> methodEntryPlaces
+- Map<Pair<SootMethod,Unit>,PlaceHLAPI> unitExitPlaces
+- Deque<PlaceHLAPI> returnPlaceStack
+- String packageName
+- TransitionHLAPI endTransition
++ {static} PageHLAPI getMainPage()
+- PageHLAPI createPage(String,PetriNetHLAPI)
++ PetriNetHLAPI build(SootClass)
+- void connectToReturn(PlaceHLAPI,String,SootMethod)
+- PlaceHLAPI traverseMethod(SootMethod,PlaceHLAPI,Set<SootMethod>,PlaceHLAPI)
+- void processGoto(JGotoStmt,PlaceHLAPI,Queue<Pair<Unit,PlaceHLAPI>>,Set<Unit>)
+- void processReturn(MyPlace)
+- void processSwitch(SwitchStmt,PlaceHLAPI,PlaceHLAPI,UnitGraph,Queue<Pair<Unit,PlaceHLAPI>>,Set<Unit>,SootMethod,MyPlace,Set<SootMethod>)
+- PlaceHLAPI processBrunch(SootMethod,PlaceHLAPI,Set<SootMethod>,PlaceHLAPI,Queue<Pair<Unit,PlaceHLAPI>>,Unit)
+- void processIf(IfStmt,PlaceHLAPI,PlaceHLAPI,UnitGraph,Queue<Pair<Unit,PlaceHLAPI>>,Set<Unit>,SootMethod,MyPlace,Set<SootMethod>)
+- void processCycle(Unit,Unit,Unit,PlaceHLAPI,PlaceHLAPI,UnitGraph,Queue<Pair<Unit,PlaceHLAPI>>,Set<Unit>,SootMethod,MyPlace,Set<SootMethod>)
+- PlaceHLAPI getOrCreateUnitEntryPlace(Unit,SootMethod)
+- void processInvoke(Unit,PlaceHLAPI,PlaceHLAPI,UnitGraph,Queue<Pair<Unit,PlaceHLAPI>>,Set<Unit>,SootMethod,Set<SootMethod>,MyPlace)
+- void processObjectNotify(Unit,InstanceInvokeExpr,PlaceHLAPI,PlaceHLAPI,UnitGraph,Queue<Pair<Unit,PlaceHLAPI>>,Set<Unit>,SootMethod,MyPlace)
+- void processObjectWait(Unit,InstanceInvokeExpr,PlaceHLAPI,PlaceHLAPI,UnitGraph,Queue<Pair<Unit,PlaceHLAPI>>,Set<Unit>,SootMethod,MyPlace)
+- void processMethodCall(InvokeStmt,SootMethod,PlaceHLAPI,PlaceHLAPI,UnitGraph,Queue<Pair<Unit,PlaceHLAPI>>,Set<Unit>,SootMethod,Set<SootMethod>,MyPlace)
+- boolean isApplicationClass(SootMethod)
+- void processThreadStart(Unit,InstanceInvokeExpr,PlaceHLAPI,PlaceHLAPI,UnitGraph,Queue<Pair<Unit,PlaceHLAPI>>,Set<Unit>,SootMethod,Set<SootMethod>,MyPlace)
+- void processExitMonitor(Unit,PlaceHLAPI,PlaceHLAPI,UnitGraph,Queue<Pair<Unit,PlaceHLAPI>>,Set<Unit>,SootMethod,MyPlace)
++ {static} Unit getVariableUnit(String)
+- void processEnterMonitor(Unit,PlaceHLAPI,PlaceHLAPI,UnitGraph,Queue<Pair<Unit,PlaceHLAPI>>,Set<Unit>,SootMethod,MyPlace)
+- void processDefault(Unit,PlaceHLAPI,UnitGraph,Queue<Pair<Unit,PlaceHLAPI>>,Set<Unit>,SootMethod,MyPlace)
+- String formatUnit(Unit)
+- void handleSuccessors(Unit,PlaceHLAPI,PlaceHLAPI,UnitGraph,Queue<Pair<Unit,PlaceHLAPI>>,Set<Unit>,SootMethod,MyPlace,boolean)
+- PlaceHLAPI getOrCreateUnitExitPlace(Unit,SootMethod)
+- void addUnitToWorklist(Unit,PlaceHLAPI,Queue<Pair<Unit,PlaceHLAPI>>,Set<Unit>)
+- LockPlaces.PlaceTriple getOrCreateLockPlace(Value,Unit,SootMethod,LockPlaces.PlaceType)
+- Pair<Unit,UnitGraph> searchThreadInit(Map<ForwardQuery,AbstractBoomerangResults.Context>)
+- Unit searchLambdaInvoke(Map<ForwardQuery,AbstractBoomerangResults.Context>,String)
+- SootMethod newFindRunMethodForStartCall(Unit,SootMethod)
+- Unit getAllocUnit(SootMethod,String)
++ {static} String escapeXml(String)
++ void exportToPnml()
+}
+
+
+enum com.kolaps.Options {
++  INSTANCE
+- Map<String,Object> options
++ void setOption(String,Object)
++ Object getOption(String)
++ String getStringOption(String,String)
++ int getIntOption(String,int)
++ boolean getBooleanOption(String,boolean)
++ Map<String,Object> getAllOptions()
+- void loadDefaultOptions()
+}
+
+
+class com.kolaps.model.LambdaInfoEntry {
+- SootMethod runMethod
+- SootMethod invokeMethod
+- String lambdaVar
+- Unit invokeStmt
++ SootMethod getRunMethod()
++ SootMethod getInvokeMethod()
++ String getLambdaVar()
++ Unit getInvokeStmt()
++ void setRunMethod(SootMethod)
++ void setInvokeMethod(SootMethod)
++ void setLambdaVar(String)
++ void setInvokeStmt(Unit)
++ String toString()
+}
+
+
+class com.kolaps.PetriNetModeler {
+- {static} int transitionCounter
+- {static} int placeCounter
+- {static} int arcCounter
+- {static} boolean isDebug
+- {static} Map<PlaceHLAPI,UMPair> PtUnits
++ {static} Map<PlaceHLAPI,UMPair> getPtUnits()
++ {static} ArcHLAPI createArc(PlaceHLAPI,TransitionHLAPI,PageHLAPI)
++ {static} ArcHLAPI createArc(TransitionHLAPI,PlaceHLAPI,PageHLAPI)
++ {static} TransitionHLAPI createTransition(String,PageHLAPI)
++ {static} PlaceHLAPI createPlace(String,PageHLAPI,Unit,SootMethod)
++ {static} void deletePlace(PlaceHLAPI)
+}
+
+
+class com.kolaps.model.LockPlaces {
+- Map<String,PlaceTriple> places
++ Map<String,PlaceTriple> getPlaces()
++ PlaceTriple getPlace(String)
+- PlaceHLAPI createPlaceForType(String,PlaceType,Unit,SootMethod)
+}
+
+
+enum com.kolaps.model.PlaceType {
++  LOCK
++  WAIT
++  NOTIFY
+}
+
+class com.kolaps.model.LockPlaces$PlaceTriple {
+- PlaceHLAPI lock
+- PlaceHLAPI wait
+- PlaceHLAPI notify
+- Local var
+- String varName
++ Local getVar()
++ void setVar(Local)
++ String getVarName()
++ PlaceHLAPI getLock(Unit,SootMethod)
++ PlaceHLAPI getWait(Unit,SootMethod)
++ PlaceHLAPI getNotify(Unit,SootMethod)
+}
+
+
+class com.kolaps.PTExtension {
+- {static} ArrayList<String> inhibitorArcs
++ {static} void modifyPnml()
++ {static} void addInhibitorArc(String)
+}
+
+
+class com.kolaps.utils.RetroLambda {
+- {static} void extractJar(String,String)
++ {static} void deleteDirectory(Path)
++ {static} void run(String)
++ {static} void createJar(String,String)
+}
+
+class com.kolaps.DeadlockDetector {
+- {static} String SKIP_MARKING_TOKEN
++ String runTedd(String)
++ List<List<String>> parseDeadStatesFromTeddOutput(String)
++ List<Map<PlaceHLAPI,UMPair>> mapPlacesToUnits(List<List<String>>,Map<PlaceHLAPI,UMPair>)
+- void outputDeadlocks(List<Map<PlaceHLAPI,UMPair>>)
++ {static} void printUnitContext(SootMethod,Unit)
++ LambdaInfoEntry findLambdasCallingMethod(SootMethod)
++ void run()
+}
+
+
+class com.kolaps.model.LambdaMethods {
+- {static} List<LambdaInfoEntry> entries
++ {static} void addEntry(LambdaInfoEntry)
++ {static} void addEntry(SootMethod,SootMethod,String,Unit)
++ {static} List<LambdaInfoEntry> getAllEntries()
++ {static} LambdaInfoEntry getEntry(int)
++ {static} int getSize()
++ {static} void clearEntries()
++ {static} LambdaInfoEntry removeEntry(int)
++ {static} boolean removeEntry(LambdaInfoEntry)
+}
+
+
+' --- Core Workflow ---
+com.kolaps.Main ..> com.kolaps.SootInitializer : invokes
+com.kolaps.SootInitializer ..> com.kolaps.PetriNetBuilder : passes instance to parseProgram
+com.kolaps.SootInitializer ..> com.kolaps.utils.RetroLambda : invokes run
+com.kolaps.SootInitializer ..> com.kolaps.analysis.BoomAnalysis : invokes setup
+
+com.kolaps.Main ..> com.kolaps.PetriNetBuilder : creates instance, invokes exportToPnml
+com.kolaps.Main ..> com.kolaps.PTExtension : invokes modifyPnml
+com.kolaps.Main ..> com.kolaps.DeadlockDetector : creates instance, invokes run
+
+' --- PetriNetBuilder Dependencies ---
+com.kolaps.PetriNetBuilder ..> com.kolaps.PetriNetModeler : uses static methods for creation
+com.kolaps.PetriNetBuilder ..> com.kolaps.model.LockPlaces : uses to manage lock places
+com.kolaps.PetriNetBuilder ..> com.kolaps.analysis.BoomAnalysis : invokes runAnalysis
+com.kolaps.PetriNetBuilder ..> com.kolaps.model.LambdaMethods : invokes addEntry
+com.kolaps.PetriNetBuilder ..> com.kolaps.MyPlace : uses (though it's a simple wrapper)
+
+' --- PetriNetModeler Dependencies ---
+com.kolaps.PetriNetModeler ..> com.kolaps.model.UMPair : stores in PtUnits map
+
+' --- LockPlaces Dependencies ---
+com.kolaps.model.LockPlaces o-- com.kolaps.model.LockPlaces$PlaceTriple : contains
+com.kolaps.model.LockPlaces ..> com.kolaps.PetriNetModeler : uses createPlace (indirectly via its own createPlaceForType)
+com.kolaps.model.LockPlaces ..> com.kolaps.PetriNetBuilder : uses getMainPage (static)
+com.kolaps.model.LockPlaces$PlaceTriple ..> com.kolaps.model.LockPlaces : (inner class relationship)
+com.kolaps.model.LockPlaces ..> com.kolaps.model.PlaceType : uses enum
+
+' --- DeadlockDetector Dependencies ---
+com.kolaps.DeadlockDetector ..> com.kolaps.Options : uses INSTANCE for config
+com.kolaps.DeadlockDetector ..> com.kolaps.PetriNetModeler : uses getPtUnits
+com.kolaps.DeadlockDetector ..> com.kolaps.model.LambdaMethods : uses getAllEntries
+com.kolaps.DeadlockDetector ..> com.kolaps.model.LambdaInfoEntry : uses (returned by LambdaMethods)
+com.kolaps.DeadlockDetector ..> com.kolaps.model.UMPair : uses (from PtUnits map)
+
+' --- Options Usage ---
+com.kolaps.Main ..> com.kolaps.Options : uses INSTANCE
+com.kolaps.SootInitializer ..> com.kolaps.Options : uses INSTANCE
+com.kolaps.PetriNetBuilder ..> com.kolaps.Options : uses INSTANCE (for pnml_file in export)
+com.kolaps.PetriNetModeler ..> com.kolaps.Options : uses INSTANCE (for debug flag)
+com.kolaps.PTExtension ..> com.kolaps.Options : uses INSTANCE (for pnml_file)
+com.kolaps.utils.RetroLambda ..> com.kolaps.Options : uses INSTANCE (for app.jar path)
+
+' --- Analysis Dependencies ---
+com.kolaps.analysis.BoomAnalysis +.. com.kolaps.analysis.BoomAnalysis$BoomerangOptions : inner class
+
+
+' --- PTExtension ---
+com.kolaps.PTExtension ..> com.kolaps.PetriNetBuilder : uses escapeXml (static)
+
+' --- MyPlace ---
+
+com.kolaps.analysis.BoomAnalysis$BoomerangOptions --|> boomerang.DefaultBoomerangOptions : extends
+
+
+@enduml
