@@ -5,13 +5,16 @@ import com.kolaps.model.LambdaMethods;
 import com.kolaps.model.UMPair;
 import fr.lip6.move.pnml.ptnet.Arc;
 import fr.lip6.move.pnml.ptnet.hlapi.PlaceHLAPI;
+import polyglot.ast.If;
 import soot.Body;
 import soot.PatchingChain;
 import soot.SootMethod;
 import soot.Unit;
-import soot.jimple.InvokeExpr;
-import soot.jimple.MonitorStmt;
-import soot.jimple.Stmt;
+import soot.jimple.*;
+import soot.jimple.internal.InvokeExprBox;
+import soot.jimple.internal.JInvokeStmt;
+import soot.jimple.internal.JVirtualInvokeExpr;
+import soot.jimple.internal.JimpleLocalBox;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -78,9 +81,6 @@ public class DeadlockDetector {
         boolean inDeadStatesSection = false;
 
         Pattern placePattern = Pattern.compile("\\{([^}]+)\\}");
-        // Паттерн для поиска SKIP_MARKING_TOKEN как отдельного слова.
-        // Используем \b для границ слова, чтобы "END_p1" не совпало с "MY_END_p1_SPECIAL".
-        // Pattern.quote экранирует сам токен, если он содержит спецсимволы regex.
         Pattern skipTokenPattern = Pattern.compile("\\b" + Pattern.quote(SKIP_MARKING_TOKEN) + "\\b");
 
         for (String line : teddOutput.split("\\r?\\n")) {
@@ -88,29 +88,37 @@ public class DeadlockDetector {
                 inDeadStatesSection = true;
                 continue;
             }
-            if (line.startsWith("-------------------") || line.startsWith("------------------")) {
+            if (line.startsWith("-------------------")) {
                 continue;
             }
 
             if (inDeadStatesSection) {
-                // Пропускаем строки, которые явно не являются маркировками
                 if (line.trim().isEmpty() || line.startsWith("WARNING:") || line.startsWith("CHOICE") || line.contains("state(s)") || line.matches(".*\\d+\\.\\d+s.*")) {
                     continue;
                 }
 
-                // Создаем версию строки БЕЗ содержимого фигурных скобок,
-                // чтобы проверить наличие SKIP_MARKING_TOKEN вне их.
-                String lineWithoutBracedContent = line.replaceAll("\\{[^}]*\\}", " "); // Заменяем на пробел для сохранения границ слов
+                String lineWithoutBracedContent = line.replaceAll("\\{[^}]*\\}", " "); // сохранить пробелы для корректных границ слов
 
                 if (skipTokenPattern.matcher(lineWithoutBracedContent).find()) {
                     System.out.println("Skipping marking line due to presence of '" + SKIP_MARKING_TOKEN + "' outside {}: " + line);
-                    continue; // Пропускаем всю эту строку
+                    continue;
                 }
 
-                Matcher matcher = placePattern.matcher(line);
                 List<String> currentMarking = new ArrayList<>();
+
+                // Сначала добавить содержимое из {}
+                Matcher matcher = placePattern.matcher(line);
                 while (matcher.find()) {
-                    currentMarking.add(matcher.group(1));
+                    currentMarking.add(matcher.group(1).trim());
+                }
+
+                // Удалить всё в фигурных скобках, чтобы остались только метки вне скобок
+                String lineWithoutBraces = line.replaceAll("\\{[^}]*\\}", " ");
+                // Разбить по пробелам и добавить оставшиеся токены
+                for (String token : lineWithoutBraces.trim().split("\\s+")) {
+                    if (!token.isEmpty()) {
+                        currentMarking.add(token.trim());
+                    }
                 }
 
                 if (!currentMarking.isEmpty()) {
@@ -118,6 +126,7 @@ public class DeadlockDetector {
                 }
             }
         }
+
         return deadStateMarkings;
     }
 
@@ -179,13 +188,19 @@ public class DeadlockDetector {
                 }
                 UMPair p = entry.getValue();
                 SootMethod threadMethod = p.getSootMethod();
+                String signature = null;
+                if (p.getUnit() instanceof InvokeStmt) {
+                    InvokeStmt stmt = (InvokeStmt) p.getUnit();
+                    InvokeExpr invokeExpr = stmt.getInvokeExpr();
+                    SootMethod targetMethod = invokeExpr.getMethod(); // Получаем целевой метод
+                    signature = targetMethod.getSignature();
+                }
                 if (p.getUnit() instanceof MonitorStmt) {
-                    /*System.out.println("    Блокировка после захвата ресурса "+ ansi().fgRgb(17,255,0).a(((MonitorStmt) p.getUnit()).getOp()));
-                    System.out.print(ansi().fgRgb(218,196,0).a("    Место старта потока: ").reset());
-                    System.out.print(lm.getInvokeStmt().toString() + ansi().fgRgb(218,196,0).a(" в методе ").reset()+lm.getInvokeMethod().toString()+"\n");
-                    System.out.println("");
-                    printUnitContext(p.getSootMethod(),p.getUnit());
-                    System.out.println("");*/
+
+                } else if (signature != null && ((signature.equals("<java.lang.Object: void wait()>") ||
+                        signature.equals("<java.lang.Object: void wait(long)>") ||
+                        signature.equals("<java.lang.Object: void wait(long, int)>")))) {
+
                 } else {
                     toRemove.add(entry.getKey());
                 }
@@ -197,7 +212,7 @@ public class DeadlockDetector {
 
         deadStatePlaceNames.removeIf(Map::isEmpty);
         if (deadStatePlaceNames.isEmpty()) {
-            System.out.println("Взаимные блокировки не обнаружены");
+            System.out.println(ansi().fgRgb(255, 0, 0).a("Взаимные блокировки не обнаружены").reset());
             return;
         }
         int i = 1;
@@ -210,12 +225,23 @@ public class DeadlockDetector {
                 SootMethod threadMethod = p.getSootMethod();
                 LambdaInfoEntry lm = findLambdasCallingMethod(threadMethod);
 
-                System.out.println("    Блокировка после захвата ресурса " + ansi().fgRgb(17, 255, 0).a(((MonitorStmt) p.getUnit()).getOp()));
-                System.out.print(ansi().fgRgb(218, 196, 0).a("    Место старта потока: ").reset());
-                System.out.print(lm.getInvokeStmt().toString() + ansi().fgRgb(218, 196, 0).a(" в методе ").reset() + lm.getInvokeMethod().toString() + "\n");
-                System.out.println("");
-                printUnitContext(p.getSootMethod(), p.getUnit());
-                System.out.println("");
+                if (p.getUnit() instanceof MonitorStmt) {
+                    System.out.println("    Блокировка после захвата ресурса " + ansi().fgRgb(17, 255, 0).a(((MonitorStmt) p.getUnit()).getOp()));
+                    System.out.print(ansi().fgRgb(218, 196, 0).a("    Место старта потока: ").reset());
+                    System.out.print(lm.getInvokeStmt().toString() + ansi().fgRgb(218, 196, 0).a(" в методе ").reset() + lm.getInvokeMethod().toString() + "\n");
+                    System.out.println("");
+                    printUnitContext(p.getSootMethod(), p.getUnit());
+                    System.out.println("");
+                } else if (p.getUnit() instanceof InvokeStmt) {
+
+                    System.out.println("    Блокировка, ожидание ресурса " + ansi().fgRgb(17, 255, 0).a(((JimpleLocalBox)((JVirtualInvokeExpr)((InvokeExprBox)((JInvokeStmt)p.getUnit()).getInvokeExprBox()).getValue()).getBaseBox()).getValue()));
+                    System.out.print(ansi().fgRgb(218, 196, 0).a("    Место старта потока: ").reset());
+                    System.out.print(lm.getInvokeStmt().toString() + ansi().fgRgb(218, 196, 0).a(" в методе ").reset() + lm.getInvokeMethod().toString() + "\n");
+                    System.out.println("");
+                    printUnitContext(p.getSootMethod(), p.getUnit());
+                    System.out.println("");
+
+                }
 
             }
             i++;
@@ -347,6 +373,7 @@ public class DeadlockDetector {
         // 3. Парсим вывод tedd
         List<List<String>> deadStatePlaceNames = parseDeadStatesFromTeddOutput(teddOutput);
         if (deadStatePlaceNames.isEmpty()) {
+            System.out.println(ansi().fgRgb(255, 0, 0).a("Взаимные блокировки не обнаружены").reset());
             return;
         }
 

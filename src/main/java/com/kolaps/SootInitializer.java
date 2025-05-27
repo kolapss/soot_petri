@@ -47,13 +47,6 @@ public class SootInitializer {
 
         mainClass = Scene.v().getMainClass();
 
-        for(SootClass f : Scene.v().getApplicationClasses())
-        {
-            for(SootMethod m : f.getMethods())
-            {
-                m.retrieveActiveBody();
-            }
-        }
 
         //PackManager.v().writeOutput();
         mainClass.getMethods();
@@ -72,10 +65,9 @@ public class SootInitializer {
         Options.v().set_whole_program(true);
         Options.v().setPhaseOption("cg.spark", "on");
         Options.v().setPhaseOption("cg.spark","enabled:true");
-        //Options.v().setPhaseOption("cg.spark", "cs-demand:true");
-        Options.v().setPhaseOption("cg.spark","geom-pta:true");
+        /*Options.v().setPhaseOption("cg.spark","geom-pta:true");
         Options.v().setPhaseOption("cg.spark","simplify-offline:false");
-        Options.v().setPhaseOption("cg.spark","geom-runs:1");
+        Options.v().setPhaseOption("cg.spark","geom-runs:1");*/
         Options.v().setPhaseOption("cg", "all-reachable:true");
         Options.v().set_output_format(Options.output_format_none);
         Options.v().set_no_bodies_for_excluded(true);

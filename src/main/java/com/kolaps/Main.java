@@ -62,6 +62,8 @@ public class Main {
             throw new RuntimeException(e);
         }
         SootInitializer.parseProgram(jarFilePath, builder);
+
+
         try {
             builder.exportToPnml();
         } catch (OtherException | ValidationFailedException | BadFileFormatException | IOException |

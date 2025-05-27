@@ -103,12 +103,14 @@ public class BoomAnalysis {
             public boolean isExcluded(DeclaredMethod method) {
                 JimpleDeclaredMethod m = (JimpleDeclaredMethod)method;
                 return !((SootClass)m.getDeclaringClass().getDelegate()).isApplicationClass();
+                //return  false;
             }
 
             @Override
             public boolean isExcluded(Method method) {
                 JimpleMethod m = (JimpleMethod)method;
                 return !((SootClass)m.getDeclaringClass().getDelegate()).isApplicationClass();
+                //return  false;
             }
         };
         boomerangSolver = new Boomerang(sootCallGraph, dat, new BoomerangOptions(SparseCFGCache.SparsificationStrategy.NONE, false));
@@ -148,15 +150,14 @@ public class BoomAnalysis {
         List<Statement> sts = statement.getMethod().getControlFlowGraph().getStatements();
 
         for (Statement st : sts) {
-            if(st.toString().startsWith(value.toString())) {
+            if(st.toString().equals(statement.toString())) {
                 first = st;
                 break;
             }
         }
         second = statement.getMethod().getControlFlowGraph().getSuccsOf(first).stream().findFirst().get();
 
-            return BackwardQuery.make(new ControlFlowGraph.Edge(first, second), val);
-
+        return BackwardQuery.make(new ControlFlowGraph.Edge(first, second), val);
 
     }
 
