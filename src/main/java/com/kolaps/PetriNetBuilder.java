@@ -122,6 +122,10 @@ public class PetriNetBuilder {
             e.printStackTrace();
             return null; // Indicate failure
         }
+        if(mainPlaceEnd!=null)
+        {
+            createArc(mainPlaceEnd,this.endTransition, mainPage);
+        }
         createArc(this.endTransition, endPlace, mainPage);
         return this.rootPetriNet;
     }
@@ -222,7 +226,7 @@ public class PetriNetBuilder {
             } else if (currentUnit instanceof LookupSwitchStmt || currentUnit instanceof TableSwitchStmt) {
                 processSwitch((SwitchStmt) currentUnit, currentUnitEntryPlace, afterPlace, graph, worklist, visitedUnits, method, endPlaceMethod, visitedOnPath);
             } else if (currentUnit instanceof ReturnStmt || currentUnit instanceof ReturnVoidStmt) {
-                processReturn(endPlaceMethod);
+                processReturn(method,endPlaceMethod);
             } else {
                 // Путь по умолчанию, просто проходим мимо, не обрабатываем
                 processDefault(currentUnit, currentUnitEntryPlace, graph, worklist, visitedUnits, method, endPlaceMethod);
@@ -253,18 +257,20 @@ public class PetriNetBuilder {
         }
     }
 
-    private void processReturn(MyPlace endPlaceMethod) {
+    private void processReturn(SootMethod method,MyPlace endPlaceMethod) {
 
-        if (!returnPlaceStack.isEmpty()) {
+        /*if (!returnPlaceStack.isEmpty()) {
             PlaceHLAPI callerReturnPlace = returnPlaceStack.peek();
             //System.out.println("    Return -> Connects to caller return place: " + callerReturnPlace.getId());
         } else {
             // Возврат из метода «main» или метода «run» потока
-            //System.out.println("    Return from top-level method (main or run).");
+            //System.out.println("    Return from top-level method (main or run).");*/
+        if (method.toString().contains("run()")) {
             if (endPlaceMethod.getPlace() != null) {
                 createArc(endPlaceMethod.getPlace(), this.endTransition, mainPage);
             }
         }
+
         // Return завершает текущий метод, не добавляем наследников здесь
     }
 
@@ -380,7 +386,7 @@ public class PetriNetBuilder {
                 break;
             }
         }
-        Queue<Unit> trueList = new LinkedList<Unit>();
+        LinkedList<Unit> trueList = new LinkedList<Unit>();
         trueList.add(trueUnit);
         Iterator<Unit> it = graph.iterator();
         Unit cUnit = it.next();
@@ -391,16 +397,17 @@ public class PetriNetBuilder {
         //Заполняем true список юнитами
         while (true) {
             cUnit = it.next();
-            if (cUnit instanceof JGotoStmt || cUnit.equals(falseUnit)) {
+            if (cUnit.equals(falseUnit)) {
                 break;
             }
             trueList.add(cUnit);
         }
+        //trueList.removeLast();
         Queue<Pair<Unit, PlaceHLAPI>> ifWorklist = new ArrayDeque<>();
         Loop selectedCycle = null;
         //Определяем является ли if началом цикла
         for (Loop f : loopNestTree) {
-            if (f.getBackJumpStmt().toString().equals(cUnit.toString())) {
+            if (f.getBackJumpStmt().equals(trueList.getLast())) {
                 selectedCycle = f;
                 break;
             }
@@ -464,7 +471,7 @@ public class PetriNetBuilder {
                 handleSuccessors(endTrueBrunch, currentPlace, afterPlace, graph, worklist, visitedUnits, method, endPlaceMethod, true);
             }
         } else {
-            processCycle(stmt, trueUnit, cUnit, currentPlace, afterPlace, graph, worklist, visitedUnits, method, endPlaceMethod, visitedOnPath);
+            processCycle(stmt, trueUnit, trueList.getLast(), currentPlace, afterPlace, graph, worklist, visitedUnits, method, endPlaceMethod, visitedOnPath);
         }
 
     }
@@ -822,7 +829,7 @@ public class PetriNetBuilder {
         if (successors.isEmpty()
                 && !(unit instanceof ReturnStmt || unit instanceof ReturnVoidStmt || unit instanceof ThrowStmt)) {
             if (method.getReturnType() instanceof VoidType) {
-                processReturn(endPlaceMethod);
+                processReturn(method,endPlaceMethod);
             } else {
                 // Нужен переход из исходного места в конечное состояние
                 TransitionHLAPI falloffTransition = createTransition("falloff_" + currentPlace.getId().hashCode(),
@@ -880,7 +887,7 @@ public class PetriNetBuilder {
             if (method.getReturnType() instanceof VoidType) {
                 System.out.println("      Обнаружено завершение void-метода без явной инструкции return. Моделируется неявный возврат из позиции: "
                         + sourcePlace.getId());
-                processReturn(endPlaceMethod); // Treat the state as requiring a return
+                processReturn(method,endPlaceMethod); // Treat the state as requiring a return
             } else {
                 System.err.println("Предупреждение: Обнаружен путь выполнения в не-void методе, который может завершиться без инструкции return: "
                         + sourcePlace.getId() + " после инструкции " + formatUnit(unit));
